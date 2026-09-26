@@ -138,9 +138,40 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
  body.printing-ledger #ledger>#ledgerPrintCompanyHead{display:block!important}
 }
 </style>
+<style>
+.ledger-search-row{display:flex;gap:8px;align-items:center}
+.ledger-search-row input{flex:1}
+.ledger-clear-btn{min-width:44px}
+.global-print-head{display:none}
+@media print{
+ html,body{height:auto!important;min-height:0!important;overflow:visible!important}
+ body>.app{min-height:0!important;height:auto!important}
+ body>section#backup{display:none!important}
+ .global-print-head{
+   display:block!important;
+   text-align:center!important;
+   color:#000!important;
+   margin:0 0 10px!important;
+   padding:0 0 8px!important;
+   border-bottom:1px solid #999!important;
+   page-break-after:avoid!important;
+ }
+ .global-print-head .pc-name{font-size:20pt!important;font-weight:800!important;line-height:1.15!important}
+ .global-print-head .pc-period{font-size:11pt!important;margin-top:4px!important}
+ body.printing-ledger #ledgerPrintCompanyHead,
+ body.printing-report #reportPrintCompanyHead{display:none!important}
+ body.printing-ledger #ledger .ledger-report-head>div#ledgerCompanyPeriod{display:none!important}
+ body.printing-ledger #ledger .ledger-report-head>b{display:block!important;text-align:center!important;font-size:16pt!important;margin-bottom:8px!important}
+ body.printing-ledger #ledgerOut:before{display:none!important}
+ body.printing-ledger #ledger{page-break-after:auto!important}
+ body.printing-ledger #ledger .card{padding:0!important;margin:0!important}
+ body.printing-ledger #ledgerOut table{page-break-after:auto!important}
+ body.printing-ledger tr{page-break-inside:avoid!important}
+}
+</style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.0.3 • Print Company Header Fix • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.0.4 • Ledger & Print Fix • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -211,7 +242,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <div id="ledgerCompanyPeriod" class="muted" style="margin-top:5px"></div>
 <div class="actions ledger-print-action" style="margin:12px 0"><button onclick="printLedger()">Print / Save PDF</button></div>
 </div><label>Search Account</label>
-<input id="ledgerSearch" autocomplete="off" placeholder="Type e.g. HDFC, Lalit, Petrol" oninput="showLedgerMatches()">
+<div class="ledger-search-row"><input id="ledgerSearch" autocomplete="off" placeholder="Type e.g. HDFC, Lalit, Petrol" oninput="showLedgerMatches()"><button type="button" class="ledger-clear-btn" onclick="clearLedgerSearch()" title="Clear">✕</button></div>
 <div id="ledgerMatches"></div>
 <select id="ledgerAcc" class="hidden" onchange="renderLedger()"></select>
 <div class="grid"><div><label>From Date</label><input type="date" id="ledgerFrom" onchange="renderLedger()"></div><div><label>To Date</label><input type="date" id="ledgerTo" onchange="renderLedger()"></div></div>
@@ -377,6 +408,13 @@ function renderAccounts(){accountList.innerHTML=`<table><tr><th>Account</th><th>
 function renderLedgerSuggestions(){}
 function showLedgerMatches(){let inp=document.getElementById('ledgerSearch'),out=document.getElementById('ledgerMatches'),sel=document.getElementById('ledgerAcc');if(!inp||!out||!sel)return;let q=inp.value.trim().toLowerCase();if(!q){out.innerHTML='';sel.value='';ledgerOut.innerHTML='';return}let list=db.accounts.filter(a=>a.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,12);out.innerHTML=list.length?`<div class="card" style="padding:6px;margin-top:6px">${list.map(a=>`<button style="display:block;width:100%;text-align:left;margin:3px 0" onclick="selectLedgerAccount(${a.id})">${esc(a.name)}</button>`).join('')}</div>`:'<p class="muted">No matching account.</p>'}
 function selectLedgerAccount(id){let a=acc(id);if(!a)return;ledgerSearch.value=a.name;ledgerAcc.value=a.id;ledgerMatches.innerHTML='';renderLedger()}
+function clearLedgerSearch(){
+ ledgerSearch.value='';
+ ledgerAcc.value='';
+ ledgerMatches.innerHTML='';
+ ledgerOut.innerHTML='';
+ ledgerSearch.focus();
+}
 function ledgerPick(){showLedgerMatches()}
 function renderLedger(){
 let c=activeCompany(),lh=document.getElementById('ledgerCompanyPeriod');
@@ -712,18 +750,20 @@ show=function(id){
    renderLedger();
  }
 };
-function printCompanyHead(el){
+function ensureGlobalPrintHead(){
+ let h=document.getElementById('globalPrintHead');
+ if(!h){h=document.createElement('div');h.id='globalPrintHead';h.className='global-print-head';document.body.prepend(h)}
  let c=activeCompany();
- if(el)el.innerHTML=`<div class="pc-name">${esc(c.name)}</div><div class="pc-period">${esc(periodText(c))}</div>`;
+ h.innerHTML=`<div class="pc-name">${esc(c.name)}</div><div class="pc-period">${esc(periodText(c))}</div>`;
 }
 function printCurrentReport(){
- printCompanyHead(document.getElementById('reportPrintCompanyHead'));
+ ensureGlobalPrintHead();
  document.body.classList.add('printing-report');
  window.print();
  setTimeout(()=>document.body.classList.remove('printing-report'),500)
 }
 function printLedger(){
- printCompanyHead(document.getElementById('ledgerPrintCompanyHead'));
+ ensureGlobalPrintHead();
  document.body.classList.add('printing-ledger');
  window.print();
  setTimeout(()=>document.body.classList.remove('printing-ledger'),500)
