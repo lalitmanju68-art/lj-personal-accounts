@@ -123,7 +123,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.9.3 • Sub Group Stable Fix • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.0 • Professional Voucher Entry • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -161,8 +161,8 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <section id="entry" class="hidden">
 <div class="card"><b>New Transaction</b>
 <label>Date</label><input type="date" id="date">
-<label>Voucher Type</label><select id="vtype" onchange="voucherUI()"><option>Cash</option><option>Bank</option><option>Journal</option><option>Contra</option></select>
-<div id="normalAccounts" class="row"><div><label>Debit Account</label><select id="dr"></select></div><div><label>Credit Account</label><select id="cr"></select></div></div>
+<label>Voucher Type</label><select id="vtype" onchange="voucherUI()"><option value="Payment">Payment</option><option value="Receipt">Receipt</option><option value="Contra">Contra</option><option value="Journal">Journal</option></select>
+<div id="normalAccounts" class="row"><div><label id="drLabel">Debit Account</label><select id="dr"></select></div><div><label id="crLabel">Credit Account</label><select id="cr"></select></div></div>
 <div id="contraBox" class="hidden"><label>Contra Direction</label><select id="contraDir" onchange="contraUI()"><option value="bankToCash">Bank → Cash</option><option value="cashToBank">Cash → Bank</option><option value="bankToBank">Bank → Bank</option></select><label id="bank1Label">Bank Account</label><select id="contraBank"></select><div id="bank2Wrap" class="hidden"><label>To Bank</label><select id="contraBank2"></select></div></div>
 <label>Amount</label><input id="amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">
 <label>Narration</label><textarea id="narr" rows="2" placeholder="Optional details"></textarea>
@@ -286,11 +286,56 @@ function saveSubGroup(){let name=sgName.value.trim(),group=sgGroup.value,id=+sgE
 function editSubGroup(id){let x=sg(id);if(!x)return;sgGroup.value=x.group;sgName.value=x.name;sgEditId.value=x.id;sgSaveBtn.textContent='UPDATE SUB GROUP';sgCancelBtn.classList.remove('hidden');sgName.focus();renderSubGroups()}
 function cancelSubGroupEdit(doRender=true){sgName.value='';sgEditId.value='';sgSaveBtn.textContent='ADD SUB GROUP';sgCancelBtn.classList.add('hidden');if(doRender)renderSubGroups()}
 function deleteSubGroup(id){let x=sg(id);if(!x)return;if(db.accounts.some(a=>a.subgroup==id))return alert('This sub group is used by an account and cannot be deleted');if(!confirm('Delete '+x.name+'?'))return;db.subgroups=db.subgroups.filter(y=>y.id!==id);persist();renderAll()}
-function voucherUI(){let is=vtype.value==='Contra';normalAccounts.classList.toggle('hidden',is);contraBox.classList.toggle('hidden',!is);contraUI()}
+function voucherAccountOptions(sel,allowedGroups,excludeCashBank){
+ if(!sel)return;
+ let old=sel.value;
+ let list=db.accounts.filter(a=>{
+   if(allowedGroups)return allowedGroups.includes(a.group);
+   if(excludeCashBank)return a.group!=='Cash'&&a.group!=='Bank';
+   return true;
+ });
+ sel.innerHTML='<option value="">Select Account</option>'+list.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
+ if(old&&list.some(a=>String(a.id)===String(old)))sel.value=old;
+}
+function voucherUI(){
+ let t=vtype.value,is=t==='Contra';
+ normalAccounts.classList.toggle('hidden',is);
+ contraBox.classList.toggle('hidden',!is);
+ if(!is){
+   if(t==='Payment'){
+     drLabel.textContent='Debit Account (Paid To / Expense)';
+     crLabel.textContent='Credit Account (Cash / Bank)';
+     voucherAccountOptions(dr,null,true);
+     voucherAccountOptions(cr,['Cash','Bank'],false);
+   }else if(t==='Receipt'){
+     drLabel.textContent='Debit Account (Cash / Bank)';
+     crLabel.textContent='Credit Account (Received From / Income)';
+     voucherAccountOptions(dr,['Cash','Bank'],false);
+     voucherAccountOptions(cr,null,true);
+   }else{
+     drLabel.textContent='Debit Account';
+     crLabel.textContent='Credit Account';
+     voucherAccountOptions(dr,null,true);
+     voucherAccountOptions(cr,null,true);
+   }
+ }
+ contraUI()
+}
 function contraUI(){if(!window.contraDir)return;let bb=contraDir.value==='bankToBank';let w=document.getElementById('bank2Wrap');let l=document.getElementById('bank1Label');if(w)w.classList.toggle('hidden',!bb);if(l)l.textContent=bb?'From Bank':'Bank Account'}
 function saveEntry(){let d,c,a=+amount.value;if(vtype.value==='Contra'){if(contraDir.value==='bankToBank'){let from=acc(+contraBank.value),to=acc(+contraBank2.value);if(!from||!to||from.group!=='Bank'||to.group!=='Bank')return alert('Select both bank accounts');if(from.id===to.id)return alert('From Bank and To Bank cannot be same');d=to.id;c=from.id}else{let cash=db.accounts.find(x=>x.group==='Cash'),bank=acc(+contraBank.value);if(!cash||!bank)return alert('Cash and Bank account are required');if(contraDir.value==='bankToCash'){d=cash.id;c=bank.id}else{d=bank.id;c=cash.id}}}else{d=+dr.value;c=+cr.value}if(!date.value||!d||!c||!(a>0))return alert('Date, accounts and Amount are required');if(d===c)return alert('Debit and Credit account cannot be same');let id=+editId.value;let item={id:id||db.nextE++,date:date.value,type:vtype.value,dr:d,cr:c,amount:a,narr:narr.value.trim(),created:new Date().toISOString()};if(id){let i=db.entries.findIndex(e=>e.id==id);if(i>=0)db.entries[i]=item}else db.entries.push(item);persist();entryMsg.textContent=id?'Entry updated successfully.':'Entry saved successfully.';resetEntry(false);renderAll()}
 function resetEntry(clearMsg=true){amount.value='';narr.value='';editId.value='';saveBtn.textContent='SAVE ENTRY';if(clearMsg)entryMsg.textContent='';voucherUI()}
-function editEntry(id){let e=db.entries.find(x=>x.id==id);if(!e)return;show('entry');date.value=e.date;vtype.value=e.type;amount.value=e.amount;narr.value=e.narr||'';editId.value=e.id;saveBtn.textContent='UPDATE ENTRY';if(e.type==='Contra'){let da=acc(e.dr),ca=acc(e.cr);if(da?.group==='Cash'&&ca?.group==='Bank'){contraDir.value='bankToCash';contraBank.value=e.cr}else if(da?.group==='Bank'&&ca?.group==='Cash'){contraDir.value='cashToBank';contraBank.value=e.dr}else if(da?.group==='Bank'&&ca?.group==='Bank'){contraDir.value='bankToBank';contraBank.value=e.cr;contraBank2.value=e.dr}}else{dr.value=e.dr;cr.value=e.cr}voucherUI()}
+function editEntry(id){let e=db.entries.find(x=>x.id==id);if(!e)return;show('entry');date.value=e.date;
+let et=e.type;
+if(et==='Cash'||et==='Bank'){
+ let da=acc(e.dr),ca=acc(e.cr);
+ et=(ca&&(ca.group==='Cash'||ca.group==='Bank'))?'Payment':((da&&(da.group==='Cash'||da.group==='Bank'))?'Receipt':'Journal');
+}
+vtype.value=et;amount.value=e.amount;narr.value=e.narr||'';editId.value=e.id;saveBtn.textContent='UPDATE ENTRY';if(e.type==='Contra'){let da=acc(e.dr),ca=acc(e.cr);if(da?.group==='Cash'&&ca?.group==='Bank'){contraDir.value='bankToCash';contraBank.value=e.cr}else if(da?.group==='Bank'&&ca?.group==='Cash'){contraDir.value='cashToBank';contraBank.value=e.dr}else if(da?.group==='Bank'&&ca?.group==='Bank'){contraDir.value='bankToBank';contraBank.value=e.cr;contraBank2.value=e.dr}}else{
+ voucherUI();
+ dr.value=e.dr;cr.value=e.cr;
+ return;
+}
+voucherUI()}
 function deleteEntry(id){if(!confirm('Delete this entry?'))return;db.entries=db.entries.filter(e=>e.id!=id);persist();renderAll()}
 function acc(id){return db.accounts.find(a=>a.id==id)}
 function bal(a){let b=(a.otype==='Dr'?a.opening:-a.opening);for(let e of db.entries){if(e.dr==a.id)b+=e.amount;if(e.cr==a.id)b-=e.amount}return b}
