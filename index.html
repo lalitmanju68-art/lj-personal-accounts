@@ -121,9 +121,26 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
  .report-period{font-size:11pt!important;text-align:center!important;color:#000!important;margin-bottom:12px!important}
 }
 </style>
+<style>
+.print-company-head{display:none}
+@media print{
+ .print-company-head{
+   display:block!important;
+   text-align:center!important;
+   color:#000!important;
+   margin:0 0 14px!important;
+   padding:0 0 10px!important;
+   border-bottom:1px solid #999!important;
+ }
+ .print-company-head .pc-name{font-size:20pt!important;font-weight:800!important;line-height:1.2!important}
+ .print-company-head .pc-period{font-size:11pt!important;margin-top:5px!important}
+ body.printing-report #reports>#reportPrintCompanyHead{display:block!important}
+ body.printing-ledger #ledger>#ledgerPrintCompanyHead{display:block!important}
+}
+</style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.0.2 • Repeat Bank/Cash Entry • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.0.3 • Print Company Header Fix • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -188,6 +205,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 </section>
 
 <section id="ledger" class="hidden">
+<div id="ledgerPrintCompanyHead" class="print-company-head"></div>
 <div class="card"><div class="ledger-report-head">
 <b style="font-size:22px">Ledger</b>
 <div id="ledgerCompanyPeriod" class="muted" style="margin-top:5px"></div>
@@ -201,6 +219,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 </section>
 
 <section id="reports" class="hidden">
+<div id="reportPrintCompanyHead" class="print-company-head"></div>
 <h2>Reports</h2>
 <div class="card" id="reportMenuCard">
  <b>Select Report</b>
@@ -693,8 +712,22 @@ show=function(id){
    renderLedger();
  }
 };
-function printCurrentReport(){document.body.classList.add('printing-report');window.print();setTimeout(()=>document.body.classList.remove('printing-report'),500)}
-function printLedger(){document.body.classList.add('printing-ledger');window.print();setTimeout(()=>document.body.classList.remove('printing-ledger'),500)}
+function printCompanyHead(el){
+ let c=activeCompany();
+ if(el)el.innerHTML=`<div class="pc-name">${esc(c.name)}</div><div class="pc-period">${esc(periodText(c))}</div>`;
+}
+function printCurrentReport(){
+ printCompanyHead(document.getElementById('reportPrintCompanyHead'));
+ document.body.classList.add('printing-report');
+ window.print();
+ setTimeout(()=>document.body.classList.remove('printing-report'),500)
+}
+function printLedger(){
+ printCompanyHead(document.getElementById('ledgerPrintCompanyHead'));
+ document.body.classList.add('printing-ledger');
+ window.print();
+ setTimeout(()=>document.body.classList.remove('printing-ledger'),500)
+}
 function reportPeriodHeader(title){
  let c=activeCompany();
  return `<div class="card report-head"><div class="report-actions"><button onclick="backToReports()">← Back to Reports</button><button onclick="printCurrentReport()">Print / Save PDF</button></div><div class="report-company-name">${esc(c.name)}</div><div class="report-title">${title}</div><div class="report-period">${esc(periodText(c))}</div></div>`;
