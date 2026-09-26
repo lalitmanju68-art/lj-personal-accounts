@@ -42,10 +42,37 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
   background:linear-gradient(90deg,#fff8e1,#eef7ff)!important;
   font-weight:700!important
 }
+
+/* V2.5.1 dashboard colours - targets actual rendered labels */
+.dash-label{font-weight:700!important}
+.dash-label.cash-label{color:#176b3a!important}
+.dash-label.bank-label{color:#145da0!important}
+.dash-label.income-label{color:#087f5b!important}
+.dash-label.expense-label{color:#b45309!important}
+.dash-label.cash-label.parent-fix{}
+
+#home .cash-label,#home .bank-label,#home .income-label,#home .expense-label{font-size:16px}
+#home .cash-label ~ b,#home .bank-label ~ b,#home .income-label ~ b,#home .expense-label ~ b{font-size:25px}
+
+/* Browser support: style the card containing each label */
+#home .card:has(.cash-label){background:linear-gradient(135deg,#e7f8ed,#f8fffa);border:1px solid #b9e5c8}
+#home .card:has(.bank-label){background:linear-gradient(135deg,#e6f2ff,#f8fbff);border:1px solid #b8d7f5}
+#home .card:has(.income-label){background:linear-gradient(135deg,#e4faf4,#f8fffd);border:1px solid #b5eadc}
+#home .card:has(.expense-label){background:linear-gradient(135deg,#fff0df,#fffaf4);border:1px solid #f1d0aa}
+#home .card:has(.cash-label),#home .card:has(.bank-label),
+#home .card:has(.income-label),#home .card:has(.expense-label){
+ box-shadow:0 4px 12px rgba(0,0,0,.07);border-radius:16px
+}
+
+/* Net result and recent entries */
+#home .card:has(#netResult),#home .card:has(#net){
+ background:linear-gradient(135deg,#f5eaff,#fff8fd);border:1px solid #dcc3ef;
+ box-shadow:0 4px 12px rgba(0,0,0,.07)
+}
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.4.2 • Colourful Display • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.5.1 • Colourful Dashboard • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
