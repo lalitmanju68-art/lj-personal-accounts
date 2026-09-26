@@ -1,9 +1,4 @@
-LJ Personal Accounts — Offline V1.2
-Changes:
-- Contra: Bank → Cash
-- Contra: Cash → Bank
-- Contra: Bank → Bank (From Bank / To Bank)
-- Account dropdowns show only account names
-- Contra narration auto-fills if left blank
-- Day Book Edit/Delete retained
+LJ Personal Accounts Offline V1.1
+Contra: Bank to Cash / Cash to Bank automatic Dr/Cr.
+Day Book supports Edit/Delete.
 Backup regularly.
