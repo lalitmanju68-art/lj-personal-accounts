@@ -28,7 +28,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.3.1 • Smart Financial Year • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.4 • Company Management Menu • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -39,17 +39,18 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </div></div>
 <main>
 <section id="companies" class="hidden">
-<div class="card"><b>Company Management</b>
-<label>Company Name</label><input id="companyName" placeholder="e.g. Lalit Jain HUF">
-<div class="grid"><div><label>From Date</label><input type="date" id="companyFrom"></div><div><label>To Date</label><input type="date" id="companyTo"></div></div>
-<div class="actions"><button class="primary" onclick="createCompany()">CREATE COMPANY</button></div>
+<h2>Company</h2>
+<div class="card">
+  <b>Company Management</b>
+  <div class="actions" style="display:grid;gap:10px;margin-top:14px">
+    <button onclick="companyAction('select')">Select Company</button>
+    <button onclick="companyAction('newfy')">New Financial Year</button>
+    <button onclick="companyAction('edit')">Edit Company Name</button>
+    <button onclick="companyAction('newco')">New Company</button>
+    <button class="danger" onclick="companyAction('delete')">Delete Company</button>
+  </div>
 </div>
-<div class="card"><b>Create New Financial Year</b>
-<p class="muted">Creates a new period for the current company. Income and Expense start at zero. Other closing balances can be carried forward as opening balances.</p>
-<div class="grid"><div><label>From Date</label><input type="date" id="newFYFrom"></div><div><label>To Date</label><input type="date" id="newFYTo"></div></div>
-<div class="actions"><button class="primary" onclick="createNewFY()">CREATE NEW FINANCIAL YEAR</button></div>
-</div>
-<div class="card"><b>Companies / Financial Years</b><div id="companyList"></div></div>
+<div id="companyActionArea"></div>
 </section>
 <section id="home">
 <div class="grid">
@@ -248,6 +249,23 @@ function openSelectedFY(id){
  let x=multi.companies[id];if(!x)return;
  saveMulti();multi.active=id;db=x.db;saveMulti();closeFYPicker();renderAll();show('home');
 }
+function deleteFinancialYear(id){
+ let c=multi.companies[id];if(!c)return;
+ let yrs=familyMembers(c);
+ if(yrs.length<=1)return alert('Cannot delete the only Financial Year. Create another Financial Year first.');
+ let ac=(c.db.accounts||[]).length,en=(c.db.entries||[]).length;
+ let msg=`Delete Financial Year ${periodText(c)}?\n\nAccounts: ${ac}\nEntries: ${en}\n\nOnly this Financial Year will be deleted. This cannot be undone.`;
+ if(!confirm(msg))return;
+ let wasActive=(multi.active===id);
+ delete multi.companies[id];
+ if(wasActive){
+   let root=multi.companies[companyFamilyKey(c)];
+   let remain=Object.values(multi.companies).filter(x=>(x.id===companyFamilyKey(c)||x.parentCompanyId===companyFamilyKey(c)));
+   let next=remain.sort((a,b)=>(b.from||'').localeCompare(a.from||''))[0];
+   if(next){multi.active=next.id;db=next.db}
+ }
+ saveMulti();closeFYPicker();renderAll();show('companies');
+}
 function switchCompany(id){
  let c=multi.companies[id];if(!c)return;
  let yrs=familyMembers(c);
@@ -257,7 +275,7 @@ function switchCompany(id){
  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px';
  ov.innerHTML=`<div class="card" style="width:min(460px,100%);max-height:80vh;overflow:auto;background:white">
  <div style="display:flex;justify-content:space-between;align-items:center"><b>Select Financial Year</b><button onclick="closeFYPicker()">✕</button></div>
- <div style="margin-top:12px">${yrs.map(x=>`<button style="width:100%;margin:6px 0;text-align:left;padding:14px" onclick="openSelectedFY('${x.id}')">${esc(periodText(x))}${x.id===multi.active?' • ACTIVE':''}</button>`).join('')}</div>
+ <div style="margin-top:12px">${yrs.map(x=>`<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin:7px 0"><button style="width:100%;text-align:left;padding:14px" onclick="openSelectedFY('${x.id}')">${esc(periodText(x))}${x.id===multi.active?' • ACTIVE':''}</button><button class="danger" style="padding:14px 12px" onclick="deleteFinancialYear('${x.id}')">Delete</button></div>`).join('')}</div>
  </div>`;
  ov.onclick=e=>{if(e.target===ov)closeFYPicker()};document.body.appendChild(ov);
 }
@@ -287,19 +305,52 @@ function deleteCompanyFamily(id){
  if(ids.has(multi.active)){multi.active=Object.keys(multi.companies)[0];db=multi.companies[multi.active].db}
  saveMulti();renderAll();show('companies');
 }
-function renderCompanies(){
- if(!window.companyList)return;
- let all=Object.values(multi.companies),roots=[];
- for(let c of all){
-   let k=companyFamilyKey(c);
-   if(!roots.some(r=>companyFamilyKey(r)===k)){
-     roots.push(multi.companies[k]||c);
-   }
+
+function logicalCompanies(){
+ let all=Object.values(multi.companies),seen=new Set(),out=[];
+ for(let c of all){let k=companyFamilyKey(c);if(!seen.has(k)){seen.add(k);out.push(multi.companies[k]||c)}}
+ return out.sort((a,b)=>a.name.localeCompare(b.name));
+}
+function actionCompanyButtons(action){
+ return logicalCompanies().map(c=>`<button style="width:100%;margin:6px 0;text-align:left;padding:13px" onclick="chooseCompanyAction('${action}','${c.id}')">${esc(c.name)}</button>`).join('');
+}
+function companyAction(action){
+ let box=document.getElementById('companyActionArea');if(!box)return;
+ if(action==='newco'){
+   box.innerHTML=`<div class="card"><b>New Company</b><label>Company Name</label><input id="companyName"><div class="grid"><div><label>From Date</label><input type="date" id="companyFrom"></div><div><label>To Date</label><input type="date" id="companyTo"></div></div><div class="actions"><button class="primary" onclick="createCompany()">CREATE COMPANY</button></div></div>`;
+   let y=new Date().getFullYear(),mo=new Date().getMonth()+1;y=mo<4?y-1:y;
+   companyFrom.value=`${y}-04-01`;companyTo.value=`${y+1}-03-31`;return;
  }
- companyList.innerHTML=roots.map(c=>{
-   let yrs=familyMembers(c),active=yrs.some(x=>x.id===multi.active);
-   return `<div class="card" style="margin:10px 0"><b>${esc(c.name)}</b><div class="muted">${yrs.length} Financial Year${yrs.length===1?'':'s'}${active?' • ACTIVE':''}</div><div class="actions"><button onclick="switchCompany('${c.id}')">Open</button><button onclick="editCompany('${c.id}')">Edit</button><button class="danger" onclick="deleteCompanyFamily('${c.id}')">Delete</button></div></div>`
- }).join('');
+ let titles={select:'Select Company',newfy:'New Financial Year - Select Company',edit:'Edit Company Name - Select Company',delete:'Delete Company - Select Company'};
+ box.innerHTML=`<div class="card"><b>${titles[action]}</b><div style="margin-top:10px">${actionCompanyButtons(action)}</div></div>`;
+}
+function chooseCompanyAction(action,id){
+ let c=multi.companies[id];if(!c)return;
+ if(action==='select'){
+   let yrs=familyMembers(c);
+   let box=document.getElementById('companyActionArea');
+   box.innerHTML=`<div class="card"><b>${esc(c.name)} - Select Period</b><div style="margin-top:10px">${yrs.map(x=>`<button style="width:100%;margin:6px 0;text-align:left;padding:13px" onclick="openSelectedFY('${x.id}')">${esc(periodText(x))}${x.id===multi.active?' • ACTIVE':''}</button>`).join('')}</div></div>`;
+   return;
+ }
+ if(action==='newfy'){
+   // Make selected company's latest FY active only for creating its next FY.
+   let yrs=familyMembers(c).sort((a,b)=>(a.to||'').localeCompare(b.to||'')),last=yrs[yrs.length-1];
+   multi.active=last.id;db=last.db;saveMulti();
+   let end=new Date(last.to+'T00:00:00'),y=end.getFullYear();
+   let from=`${y}-04-01`,to=`${y+1}-03-31`;
+   let box=document.getElementById('companyActionArea');
+   box.innerHTML=`<div class="card"><b>New Financial Year - ${esc(c.name)}</b><div class="grid"><div><label>From Date</label><input type="date" id="newFYFrom" value="${from}"></div><div><label>To Date</label><input type="date" id="newFYTo" value="${to}"></div></div><div class="actions"><button class="primary" onclick="createNewFY()">CREATE NEW FINANCIAL YEAR</button></div></div>`;
+   return;
+ }
+ if(action==='edit'){
+   let n=prompt('Company Name',c.name);if(n===null)return;n=n.trim();if(!n)return;
+   familyMembers(c).forEach(x=>x.name=n);saveMulti();renderAll();companyAction('edit');return;
+ }
+ if(action==='delete'){deleteCompanyFamily(id);return}
+}
+function renderCompanies(){
+ let box=document.getElementById('companyActionArea');
+ if(box && !box.innerHTML.trim()) box.innerHTML='<div class="card"><span class="muted">Select an option above to manage companies and financial years.</span></div>';
 }
 function renderActiveCompany(){
  let c=activeCompany();
