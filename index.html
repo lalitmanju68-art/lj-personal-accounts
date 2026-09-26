@@ -24,7 +24,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.1 • Multi Company • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.2 • Multi Company • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -37,8 +37,13 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 <section id="companies" class="hidden">
 <div class="card"><b>Company Management</b>
 <label>Company Name</label><input id="companyName" placeholder="e.g. Lalit Jain HUF">
-<label>Financial Year</label><input id="companyFY" placeholder="e.g. 2026-27">
+<div class="grid"><div><label>From Date</label><input type="date" id="companyFrom"></div><div><label>To Date</label><input type="date" id="companyTo"></div></div>
 <div class="actions"><button class="primary" onclick="createCompany()">CREATE COMPANY</button></div>
+</div>
+<div class="card"><b>Create New Financial Year</b>
+<p class="muted">Creates a new period for the current company. Income and Expense start at zero. Other closing balances can be carried forward as opening balances.</p>
+<div class="grid"><div><label>From Date</label><input type="date" id="newFYFrom"></div><div><label>To Date</label><input type="date" id="newFYTo"></div></div>
+<div class="actions"><button class="primary" onclick="createNewFY()">CREATE NEW FINANCIAL YEAR</button></div>
 </div>
 <div class="card"><b>Companies / Financial Years</b><div id="companyList"></div></div>
 </section>
@@ -193,15 +198,20 @@ function clearSearch(){document.getElementById('searchText').value='';document.g
 function backup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='LJ_Accounts_Backup_'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(u)}
 function restore(inp){let f=inp.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.accounts||!x.entries)throw 0;if(confirm('Current data will be replaced by this backup. Continue?')){db=x;persist();renderAll();alert('Backup restored.')}}catch(e){alert('Invalid backup file.')}inp.value=''};r.readAsText(f)}
 
+function periodText(c){if(c.from&&c.to)return `${idate(c.from)} to ${idate(c.to)}`;return c.fy||''}
+function defaultPeriodFromFY(fy){let m=String(fy||'').match(/^(\d{4})-(\d{2})$/);if(!m)return null;let y=+m[1];return {from:`${y}-04-01`,to:`${y+1}-03-31`}}
+function ensureCompanyPeriods(){for(let c of Object.values(multi.companies)){if((!c.from||!c.to)&&c.fy){let r=defaultPeriodFromFY(c.fy);if(r){c.from=r.from;c.to=r.to}}}}
+ensureCompanyPeriods();
 function saveMulti(){activeCompany().db=db;localStorage.setItem(MK,JSON.stringify(multi));localStorage.setItem(K,JSON.stringify(db))}
 function createCompany(){
- let name=(companyName.value||'').trim(),fy=(companyFY.value||'').trim();
+ let name=(companyName.value||'').trim(),from=companyFrom.value,to=companyTo.value;
  if(!name)return alert('Enter Company Name');
- if(!/^\d{4}-\d{2}$/.test(fy))return alert('Financial Year format must be like 2026-27');
+ if(!from||!to)return alert('Enter From Date and To Date');
+ if(from>to)return alert('From Date cannot be after To Date');
  let id='c'+Date.now();
- multi.companies[id]={id,name,fy,db:{accounts:[],entries:[],subgroups:[]}};
+ multi.companies[id]={id,name,from,to,db:{accounts:[],entries:[],subgroups:[],nextA:1,nextE:1,nextSG:1}};
  multi.active=id;db=multi.companies[id].db;saveMulti();
- companyName.value='';companyFY.value='';renderAll();show('companies');
+ companyName.value='';companyFrom.value='';companyTo.value='';renderAll();show('companies');
 }
 function switchCompany(id){
  if(!multi.companies[id])return;
@@ -210,9 +220,10 @@ function switchCompany(id){
 function editCompany(id){
  let c=multi.companies[id];if(!c)return;
  let n=prompt('Company Name',c.name);if(n===null)return;n=n.trim();if(!n)return;
- let fy=prompt('Financial Year',c.fy);if(fy===null)return;fy=fy.trim();
- if(!/^\d{4}-\d{2}$/.test(fy))return alert('Financial Year format must be like 2026-27');
- c.name=n;c.fy=fy;saveMulti();renderCompanies();renderActiveCompany();
+ let from=prompt('From Date (YYYY-MM-DD)',c.from||'');if(from===null)return;from=from.trim();
+ let to=prompt('To Date (YYYY-MM-DD)',c.to||'');if(to===null)return;to=to.trim();
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(from)||!/^\d{4}-\d{2}-\d{2}$/.test(to)||from>to)return alert('Enter valid From/To dates');
+ c.name=n;c.from=from;c.to=to;delete c.fy;saveMulti();renderCompanies();renderActiveCompany();
 }
 function deleteCompany(id){
  let keys=Object.keys(multi.companies);if(keys.length<=1)return alert('At least one company must remain.');
@@ -227,14 +238,35 @@ function deleteCompany(id){
 function renderCompanies(){
  if(!window.companyList)return;
  let cs=Object.values(multi.companies);
- companyList.innerHTML=cs.map(c=>`<div class="card" style="margin:10px 0"><b>${esc(c.name)}</b><div class="muted">${esc(c.fy)}${c.id===multi.active?' • ACTIVE':''}</div><div class="actions"><button onclick="switchCompany('${c.id}')">Open</button><button onclick="editCompany('${c.id}')">Edit</button><button class="danger" onclick="deleteCompany('${c.id}')">Delete</button></div></div>`).join('');
+ companyList.innerHTML=cs.map(c=>`<div class="card" style="margin:10px 0"><b>${esc(c.name)}</b><div class="muted">${esc(periodText(c))}${c.id===multi.active?' • ACTIVE':''}</div><div class="actions"><button onclick="switchCompany('${c.id}')">Open</button><button onclick="editCompany('${c.id}')">Edit</button><button class="danger" onclick="deleteCompany('${c.id}')">Delete</button></div></div>`).join('');
 }
 function renderActiveCompany(){
  let c=activeCompany();
  if(window.activeCompanyName)activeCompanyName.textContent=c.name;
- if(window.activeFYName)activeFYName.textContent=c.fy;
+ if(window.activeFYName)activeFYName.textContent=periodText(c);
 }
-function renderAll(){renderCompanies();renderActiveCompany();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();renderAccounts();renderLedgerSuggestions();renderLedger();initFY();renderReports();renderAccountSuggestions();renderSearch()}
+function cloneOpeningAccount(a,newId,opening){
+ return {id:newId,name:a.name,group:a.group,subgroup:a.subgroup||null,opening:Math.abs(opening),otype:opening>=0?'Dr':'Cr'}
+}
+function createNewFY(){
+ let source=activeCompany(),from=newFYFrom.value,to=newFYTo.value;
+ if(!from||!to)return alert('Enter From Date and To Date');
+ if(from>to)return alert('From Date cannot be after To Date');
+ if(Object.values(multi.companies).some(c=>c.name===source.name&&c.from===from&&c.to===to))return alert('This financial year already exists');
+ let carry=confirm('Carry forward closing balances to new financial year?');
+ let olddb=db,newdb={accounts:[],entries:[],subgroups:JSON.parse(JSON.stringify(olddb.subgroups||[])),nextA:1,nextE:1,nextSG:olddb.nextSG||1};
+ for(let a of olddb.accounts){
+   let opening=0;
+   if(carry && a.group!=='Income' && a.group!=='Expense')opening=bal(a);
+   let na=cloneOpeningAccount(a,a.id,opening);
+   newdb.accounts.push(na);
+   newdb.nextA=Math.max(newdb.nextA,a.id+1);
+ }
+ let id='c'+Date.now();
+ multi.companies[id]={id,name:source.name,from,to,parentCompanyId:source.parentCompanyId||source.id,db:newdb};
+ multi.active=id;db=newdb;saveMulti();newFYFrom.value='';newFYTo.value='';renderAll();show('home');
+}
+function renderAll(){renderCompanies();renderActiveCompany();let _c=activeCompany();if(window.repFrom&&window.repTo&&_c.from&&_c.to){if(!repFrom.value)repFrom.value=_c.from;if(!repTo.value)repTo.value=_c.to;}options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();renderAccounts();renderLedgerSuggestions();renderLedger();initFY();renderReports();renderAccountSuggestions();renderSearch()}
 date.value=new Date().toISOString().slice(0,10);renderAll();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
