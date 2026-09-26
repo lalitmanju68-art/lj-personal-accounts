@@ -72,7 +72,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.5.2 • Colourful Dashboard • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.5.3 • Colourful Dashboard • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -450,6 +450,23 @@ function paintDashboard(){
   'This Month Income':['linear-gradient(135deg,#d9f7ef,#f6fffc)','#087f5b','#a7e3d3'],
   'This Month Expense':['linear-gradient(135deg,#ffe6c9,#fff9f2)','#b45309','#efc28f']
  };
+ document.querySelectorAll('#home .muted').forEach(labelEl=>{
+   const label=(labelEl.textContent||'').trim(),v=labels[label];
+   if(!v)return;
+   let tile=labelEl.parentElement;
+   if(!tile)return;
+   tile.style.setProperty('background',v[0],'important');
+   tile.style.setProperty('border','2px solid '+v[2],'important');
+   tile.style.setProperty('border-radius','16px','important');
+   tile.style.setProperty('box-shadow','0 5px 14px rgba(0,0,0,.10)','important');
+   labelEl.style.setProperty('color',v[1],'important');
+   labelEl.style.setProperty('font-weight','800','important');
+   Array.from(tile.children).forEach(el=>{
+     if(el!==labelEl && /₹|Deficit|Surplus/.test(el.textContent||'')){
+       el.style.setProperty('color',v[1],'important');
+     }
+   });
+ });
  document.querySelectorAll('#home .card').forEach(card=>{
    const txt=(card.innerText||'').trim();
    for(const [label,v] of Object.entries(labels)){
