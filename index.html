@@ -171,7 +171,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.0.4 • Ledger & Print Fix • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.0.5 • Data Persistence Fix • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -314,9 +314,34 @@ if(!multi){
   localStorage.setItem(MK,JSON.stringify(multi));
 }
 function activeCompany(){return multi.companies[multi.active]}
+
+/* V3.0.5 DATA SAFETY:
+   Older builds sometimes saved Accounts/Entries/Sub Groups only to ljpa_v1,
+   while multi-company data stayed stale. Recover the newer local copy when it
+   clearly contains more records for the currently active company. */
+if(legacy && multi && multi.companies && multi.companies[multi.active]){
+ let mdb=multi.companies[multi.active].db||{};
+ let score=x=>(Array.isArray(x.accounts)?x.accounts.length:0)+(Array.isArray(x.entries)?x.entries.length:0)+(Array.isArray(x.subgroups)?x.subgroups.length:0);
+ if(score(legacy)>score(mdb)){
+   multi.companies[multi.active].db=legacy;
+   localStorage.setItem(MK,JSON.stringify(multi));
+ }
+}
 let db=activeCompany().db;
-if(!Array.isArray(db.subgroups))db.subgroups=[];if(!db.nextSG)db.nextSG=1;
-function persist(){localStorage.setItem(K,JSON.stringify(db))}
+if(!Array.isArray(db.accounts))db.accounts=[];
+if(!Array.isArray(db.entries))db.entries=[];
+if(!Array.isArray(db.subgroups))db.subgroups=[];
+if(!db.nextA)db.nextA=(db.accounts.reduce((m,a)=>Math.max(m,+a.id||0),0)+1);
+if(!db.nextE)db.nextE=(db.entries.reduce((m,e)=>Math.max(m,+e.id||0),0)+1);
+if(!db.nextSG)db.nextSG=(db.subgroups.reduce((m,g)=>Math.max(m,+g.id||0),0)+1);
+
+/* Every data change is now written to BOTH the active company database
+   and the compatibility copy before the screen is refreshed. */
+function persist(){
+ activeCompany().db=db;
+ localStorage.setItem(MK,JSON.stringify(multi));
+ localStorage.setItem(K,JSON.stringify(db));
+}
 function money(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}
 function idate(d){if(!d)return '';let p=String(d).split('-');return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d}
 function show(id){document.querySelectorAll('main>section').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');renderAll()}
