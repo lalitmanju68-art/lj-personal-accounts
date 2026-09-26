@@ -69,10 +69,15 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
  background:linear-gradient(135deg,#f5eaff,#fff8fd);border:1px solid #dcc3ef;
  box-shadow:0 4px 12px rgba(0,0,0,.07)
 }
+
+#reportOutput table{width:100%}
+@media(max-width:620px){
+ #reportOutput .card>div[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}
+}
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.7 • Reports Menu • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.7.1 • Proper Balance Sheet • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -147,7 +152,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 
 <section id="reports" class="hidden">
 <h2>Reports</h2>
-<div class="card">
+<div class="card" id="reportMenuCard">
  <b>Select Report</b>
  <div class="actions" style="display:grid;gap:9px;margin-top:12px">
   <button onclick="selectReport('daybook')">Day Book</button>
@@ -563,12 +568,17 @@ function renderBackupInfo(){
 
 function reportPeriodHeader(title){
  let c=activeCompany();
- return `<div class="card"><b style="font-size:20px">${title}</b><div class="muted" style="margin-top:5px">${esc(c.name)} • ${esc(periodText(c))}</div></div>`;
+ return `<div class="card"><button onclick="backToReports()" style="margin-bottom:12px">← Back to Reports</button><br><b style="font-size:20px">${title}</b><div class="muted" style="margin-top:5px">${esc(c.name)} • ${esc(periodText(c))}</div></div>`;
+}
+function backToReports(){
+ let menu=document.getElementById('reportMenuCard'),out=document.getElementById('reportOutput');
+ if(menu)menu.style.display='block';if(out)out.innerHTML='';
 }
 function selectReport(kind){
  renderReports();
- let out=document.getElementById('reportOutput'),legacy=document.getElementById('legacyReports');
+ let out=document.getElementById('reportOutput'),legacy=document.getElementById('legacyReports'),menu=document.getElementById('reportMenuCard');
  if(!out||!legacy)return;
+ if(menu)menu.style.display='none';
  let map={daybook:'Day Book',trial:'Trial Balance',summary:'Income & Expense Summary'};
  if(map[kind]){
    let cards=Array.from(legacy.querySelectorAll('.card'));
@@ -599,17 +609,38 @@ function profitLossHTML(){
  <tr><th>${net>=0?'Net Profit':'Net Loss'}</th><th class="num">${money(Math.abs(net))}</th></tr></table></div>`;
 }
 function balanceSheetHTML(){
- let assets=0,liabs=0;
+ let es=reportEntries(), income=0, expense=0;
+ for(let a of db.accounts){
+   if(a.group!=='Income'&&a.group!=='Expense')continue;
+   let dr=es.filter(e=>e.dr==a.id).reduce((z,e)=>z+e.amount,0);
+   let cr=es.filter(e=>e.cr==a.id).reduce((z,e)=>z+e.amount,0);
+   if(a.group==='Income')income+=cr-dr; else expense+=dr-cr;
+ }
+ let net=income-expense,assets=[],liabs=[];
  for(let a of db.accounts){
    if(a.group==='Income'||a.group==='Expense')continue;
-   let b=bal(a);
-   if(b>=0)assets+=b;else liabs+=-b;
+   let b=bal(a); if(!b)continue;
+   if(b>0)assets.push([a.name,b]); else liabs.push([a.name,-b]);
  }
- return `<div class="card"><table><tr><th>Side</th><th class="num">Amount</th></tr>
- <tr><td>Debit / Asset Balances</td><td class="num">${money(assets)}</td></tr>
- <tr><td>Credit / Liability Balances</td><td class="num">${money(liabs)}</td></tr>
- <tr><th>Difference</th><th class="num">${money(Math.abs(assets-liabs))}</th></tr></table>
- <p class="muted">Detailed classified Balance Sheet will be refined after account-group mapping is finalized.</p></div>`;
+ // Current-year result closes into the Balance Sheet:
+ // profit increases liabilities/equity; loss is shown on asset side.
+ if(net>0)liabs.push(['Current Year Net Profit',net]);
+ if(net<0)assets.push(['Current Year Net Loss',-net]);
+ let at=assets.reduce((z,x)=>z+x[1],0),lt=liabs.reduce((z,x)=>z+x[1],0);
+ let diff=at-lt;
+ // If prior capital/opening-equity mapping is not yet explicit, show balancing equity
+ // rather than presenting a misleading "difference".
+ if(diff>0)liabs.push(['Capital / Opening Equity (Balancing Figure)',diff]);
+ else if(diff<0)assets.push(['Opening / Adjustment Balance',-diff]);
+ at=assets.reduce((z,x)=>z+x[1],0);lt=liabs.reduce((z,x)=>z+x[1],0);
+ let rows=(arr)=>arr.map(x=>`<tr><td>${esc(x[0])}</td><td class="num">${money(x[1])}</td></tr>`).join('');
+ return `<div class="card">
+ <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+  <div><b>Liabilities & Equity</b><table><tr><th>Particulars</th><th class="num">Amount</th></tr>${rows(liabs)}<tr><th>Total</th><th class="num">${money(lt)}</th></tr></table></div>
+  <div><b>Assets</b><table><tr><th>Particulars</th><th class="num">Amount</th></tr>${rows(assets)}<tr><th>Total</th><th class="num">${money(at)}</th></tr></table></div>
+ </div>
+ <p class="muted">Balance Sheet totals are matched. The balancing equity line remains until Capital/Liability account-group mapping is explicitly classified.</p>
+ </div>`;
 }
 function renderAll(){renderBackupInfo();renderCompanies();renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();setTimeout(paintDashboard,0);renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
 date.value=new Date().toISOString().slice(0,10);renderAll();
