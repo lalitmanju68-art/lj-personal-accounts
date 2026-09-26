@@ -185,9 +185,24 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
  }
 }
 </style>
+<style>
+.login-gate{position:fixed;inset:0;background:rgba(15,23,42,.72);z-index:20000;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-gate.hidden{display:none!important}
+.login-box{width:min(420px,100%);background:#fff;border-radius:16px;padding:22px;box-shadow:0 18px 55px rgba(0,0,0,.3)}
+@media print{#loginGate{display:none!important}}
+</style>
 </head>
-<body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.0.6 • Ledger Print Fix • Data Safe</div></header>
+<body><div id="loginGate" class="login-gate hidden">
+<div class="login-box">
+<h2 style="margin-top:0">LJ Personal Accounts</h2>
+<p class="muted">Login Security</p>
+<label>Name</label><input id="loginName" autocomplete="username">
+<label>Password</label><input id="loginPassword" type="password" autocomplete="current-password">
+<div class="actions"><button class="primary" onclick="doLogin()">LOGIN</button></div>
+<div id="loginMsg" class="muted"></div>
+</div></div>
+<div class="app">
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.1 • Company Details + Login • Data Safe</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -204,9 +219,9 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
   <div class="actions" style="display:grid;gap:10px;margin-top:14px">
     <button onclick="companyAction('select')">Select Company</button>
     <button onclick="companyAction('newfy')">New Financial Year</button>
-    <button onclick="companyAction('edit')">Edit Company Name</button>
+    <button onclick="companyAction('edit')">Edit Company Details</button>
     <button onclick="companyAction('newco')">New Company</button>
-    <button class="danger" onclick="companyAction('delete')">Delete Financial Year</button>
+    <button onclick="showSecuritySetup()">Login Security</button><button class="danger" onclick="companyAction('delete')">Delete Financial Year</button>
   </div>
 </div>
 <div id="companyActionArea"></div>
@@ -532,7 +547,7 @@ function createCompany(){
  if(!from||!to)return alert('Enter From Date and To Date');
  if(from>to)return alert('From Date cannot be after To Date');
  let id='c'+Date.now();
- multi.companies[id]={id,name,from,to,db:{accounts:[],entries:[],subgroups:[],nextA:1,nextE:1,nextSG:1}};
+ multi.companies[id]={id,name,from,to,address:(window.companyAddress?.value||'').trim(),mobile:(window.companyMobile?.value||'').trim(),pan:(window.companyPan?.value||'').trim(),gst:(window.companyGst?.value||'').trim(),fssai:(window.companyFssai?.value||'').trim(),db:{accounts:[],entries:[],subgroups:[],nextA:1,nextE:1,nextSG:1}};
  multi.active=id;db=multi.companies[id].db;saveMulti();
  companyName.value='';companyFrom.value='';companyTo.value='';renderAll();show('companies');
 }
@@ -614,7 +629,13 @@ function actionCompanyButtons(action){
 function companyAction(action){
  let box=document.getElementById('companyActionArea');if(!box)return;
  if(action==='newco'){
-   box.innerHTML=`<div class="card"><b>New Company</b><label>Company Name</label><input id="companyName"><div class="grid"><div><label>From Date</label><input type="date" id="companyFrom"></div><div><label>To Date</label><input type="date" id="companyTo"></div></div><div class="actions"><button class="primary" onclick="createCompany()">CREATE COMPANY</button></div></div>`;
+   box.innerHTML=`<div class="card"><b>New Company</b>
+<label>Company Name</label><input id="companyName">
+<label>Address <span class="muted">(Optional)</span></label><textarea id="companyAddress" rows="2"></textarea>
+<div class="grid"><div><label>Mobile <span class="muted">(Optional)</span></label><input id="companyMobile"></div><div><label>PAN No. <span class="muted">(Optional)</span></label><input id="companyPan"></div></div>
+<div class="grid"><div><label>GST No. <span class="muted">(Optional)</span></label><input id="companyGst"></div><div><label>FSSAI No. <span class="muted">(Optional)</span></label><input id="companyFssai"></div></div>
+<div class="grid"><div><label>From Date</label><input type="date" id="companyFrom"></div><div><label>To Date</label><input type="date" id="companyTo"></div></div>
+<div class="actions"><button class="primary" onclick="createCompany()">CREATE COMPANY</button></div></div>`;
    let y=new Date().getFullYear(),mo=new Date().getMonth()+1;y=mo<4?y-1:y;
    companyFrom.value=`${y}-04-01`;companyTo.value=`${y+1}-03-31`;return;
  }
@@ -640,8 +661,14 @@ function chooseCompanyAction(action,id){
    return;
  }
  if(action==='edit'){
-   let n=prompt('Company Name',c.name);if(n===null)return;n=n.trim();if(!n)return;
-   familyMembers(c).forEach(x=>x.name=n);saveMulti();renderAll();companyAction('edit');return;
+   let box=document.getElementById('companyActionArea');
+   box.innerHTML=`<div class="card"><b>Edit Company Details</b>
+   <label>Company Name</label><input id="editCompanyName" value="${esc(c.name)}">
+   <label>Address <span class="muted">(Optional)</span></label><textarea id="editCompanyAddress" rows="2">${esc(c.address||'')}</textarea>
+   <div class="grid"><div><label>Mobile <span class="muted">(Optional)</span></label><input id="editCompanyMobile" value="${esc(c.mobile||'')}"></div><div><label>PAN No. <span class="muted">(Optional)</span></label><input id="editCompanyPan" value="${esc(c.pan||'')}"></div></div>
+   <div class="grid"><div><label>GST No. <span class="muted">(Optional)</span></label><input id="editCompanyGst" value="${esc(c.gst||'')}"></div><div><label>FSSAI No. <span class="muted">(Optional)</span></label><input id="editCompanyFssai" value="${esc(c.fssai||'')}"></div></div>
+   <div class="actions"><button class="primary" onclick="saveCompanyDetails('${id}')">SAVE COMPANY DETAILS</button></div></div>`;
+   return;
  }
  if(action==='delete'){
    let yrs=familyMembers(c),box=document.getElementById('companyActionArea');
@@ -651,6 +678,58 @@ function chooseCompanyAction(action,id){
    return;
  }
 }
+function saveCompanyDetails(id){
+ let c=multi.companies[id];if(!c)return;
+ let name=(document.getElementById('editCompanyName')?.value||'').trim();
+ if(!name)return alert('Enter Company Name');
+ let data={name,address:(document.getElementById('editCompanyAddress')?.value||'').trim(),mobile:(document.getElementById('editCompanyMobile')?.value||'').trim(),pan:(document.getElementById('editCompanyPan')?.value||'').trim(),gst:(document.getElementById('editCompanyGst')?.value||'').trim(),fssai:(document.getElementById('editCompanyFssai')?.value||'').trim()};
+ familyMembers(c).forEach(x=>Object.assign(x,data));
+ saveMulti();renderAll();companyAction('edit');
+}
+
+const SECURITY_KEY='ljpa_security_v31';
+function securityData(){try{return JSON.parse(localStorage.getItem(SECURITY_KEY)||'null')}catch(e){return null}}
+async function hashText(t){
+ if(window.crypto&&crypto.subtle){
+  let b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));
+  return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');
+ }
+ return btoa(unescape(encodeURIComponent(t)));
+}
+function showSecuritySetup(){
+ let sec=securityData(),box=document.getElementById('companyActionArea');if(!box)return;
+ box.innerHTML=`<div class="card"><b>Login Security</b>
+ <p class="muted">${sec?'Login security is ON. Change Name/Password below, or disable it.':'Set Name and Password. Both are required to enable login.'}</p>
+ <label>Name</label><input id="securityName" value="${sec?esc(sec.name):''}">
+ <label>Password</label><input id="securityPassword" type="password" placeholder="${sec?'Enter new password':'Create password'}">
+ <div class="actions"><button class="primary" onclick="saveSecurity()">SAVE LOGIN</button>${sec?'<button class="danger" onclick="disableSecurity()">DISABLE LOGIN</button>':''}</div></div>`;
+}
+async function saveSecurity(){
+ let name=(document.getElementById('securityName')?.value||'').trim(),pw=document.getElementById('securityPassword')?.value||'';
+ if(!name||!pw)return alert('Enter Name and Password');
+ localStorage.setItem(SECURITY_KEY,JSON.stringify({name,hash:await hashText(pw)}));
+ alert('Login security saved.');
+ showSecuritySetup();
+}
+function disableSecurity(){
+ if(!confirm('Disable login security?'))return;
+ localStorage.removeItem(SECURITY_KEY);sessionStorage.removeItem('ljpa_logged_v31');showSecuritySetup();
+}
+async function doLogin(){
+ let sec=securityData(),name=(loginName.value||'').trim(),pw=loginPassword.value||'';
+ if(!sec)return unlockApp();
+ let h=await hashText(pw);
+ if(name===sec.name&&h===sec.hash){sessionStorage.setItem('ljpa_logged_v31','1');unlockApp()}
+ else loginMsg.textContent='Invalid Name or Password';
+}
+function unlockApp(){document.getElementById('loginGate')?.classList.add('hidden')}
+function initLoginSecurity(){
+ let sec=securityData();
+ if(sec&&sessionStorage.getItem('ljpa_logged_v31')!=='1'){
+   document.getElementById('loginGate')?.classList.remove('hidden');
+ }else unlockApp();
+}
+
 function renderCompanies(){
  let box=document.getElementById('companyActionArea');
  if(box && !box.innerHTML.trim()) box.innerHTML='<div class="card"><span class="muted">Select an option above to manage companies and financial years.</span></div>';
@@ -692,7 +771,7 @@ function createNewFY(){
    newdb.nextA=Math.max(newdb.nextA,a.id+1);
  }
  let id='c'+Date.now();
- multi.companies[id]={id,name:source.name,from,to,parentCompanyId:companyFamilyKey(source),db:newdb};
+ multi.companies[id]={id,name:source.name,from,to,parentCompanyId:companyFamilyKey(source),address:source.address||'',mobile:source.mobile||'',pan:source.pan||'',gst:source.gst||'',fssai:source.fssai||'',db:newdb};
  multi.active=id;db=newdb;saveMulti();newFYFrom.value='';newFYTo.value='';renderAll();show('home');
 }
 
@@ -984,7 +1063,7 @@ function upgradeAccountGroupUI(){
  };
 }
 function renderAll(){renderBackupInfo();renderCompanies();setTimeout(()=>{fillAllAccountSubGroups();hideAccountMainGroup();},0);renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();fillAllAccountSubGroups();hideAccountMainGroup();renderSubGroups();voucherUI();renderHome();setTimeout(paintDashboard,0);renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
-date.value=new Date().toISOString().slice(0,10);renderAll();
+date.value=new Date().toISOString().slice(0,10);renderAll();setTimeout(initLoginSecurity,0);
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
 // V2.1 persistence bridge: existing accounting code can continue calling save().
