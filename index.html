@@ -28,7 +28,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.4 • Company Management Menu • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.4.1 • Period Safe Delete • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -47,7 +47,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
     <button onclick="companyAction('newfy')">New Financial Year</button>
     <button onclick="companyAction('edit')">Edit Company Name</button>
     <button onclick="companyAction('newco')">New Company</button>
-    <button class="danger" onclick="companyAction('delete')">Delete Company</button>
+    <button class="danger" onclick="companyAction('delete')">Delete Financial Year</button>
   </div>
 </div>
 <div id="companyActionArea"></div>
@@ -252,7 +252,7 @@ function openSelectedFY(id){
 function deleteFinancialYear(id){
  let c=multi.companies[id];if(!c)return;
  let yrs=familyMembers(c);
- if(yrs.length<=1)return alert('Cannot delete the only Financial Year. Create another Financial Year first.');
+ if(yrs.length<=1)return alert('This is the only Financial Year for this company. Create another Financial Year before deleting it.');
  let ac=(c.db.accounts||[]).length,en=(c.db.entries||[]).length;
  let msg=`Delete Financial Year ${periodText(c)}?\n\nAccounts: ${ac}\nEntries: ${en}\n\nOnly this Financial Year will be deleted. This cannot be undone.`;
  if(!confirm(msg))return;
@@ -321,7 +321,7 @@ function companyAction(action){
    let y=new Date().getFullYear(),mo=new Date().getMonth()+1;y=mo<4?y-1:y;
    companyFrom.value=`${y}-04-01`;companyTo.value=`${y+1}-03-31`;return;
  }
- let titles={select:'Select Company',newfy:'New Financial Year - Select Company',edit:'Edit Company Name - Select Company',delete:'Delete Company - Select Company'};
+ let titles={select:'Select Company',newfy:'New Financial Year - Select Company',edit:'Edit Company Name - Select Company',delete:'Delete Financial Year - Select Company'};
  box.innerHTML=`<div class="card"><b>${titles[action]}</b><div style="margin-top:10px">${actionCompanyButtons(action)}</div></div>`;
 }
 function chooseCompanyAction(action,id){
@@ -346,7 +346,13 @@ function chooseCompanyAction(action,id){
    let n=prompt('Company Name',c.name);if(n===null)return;n=n.trim();if(!n)return;
    familyMembers(c).forEach(x=>x.name=n);saveMulti();renderAll();companyAction('edit');return;
  }
- if(action==='delete'){deleteCompanyFamily(id);return}
+ if(action==='delete'){
+   let yrs=familyMembers(c),box=document.getElementById('companyActionArea');
+   box.innerHTML=`<div class="card"><b>${esc(c.name)} - Select Period to Delete</b>
+   <p class="muted">Only the selected Financial Year will be deleted. The company and other periods will remain.</p>
+   <div style="margin-top:10px">${yrs.map(x=>`<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin:7px 0"><div style="padding:12px;border:1px solid #ddd;border-radius:8px">${esc(periodText(x))}${x.id===multi.active?' • ACTIVE':''}</div><button class="danger" onclick="deleteFinancialYear('${x.id}')">Delete</button></div>`).join('')}</div></div>`;
+   return;
+ }
 }
 function renderCompanies(){
  let box=document.getElementById('companyActionArea');
