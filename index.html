@@ -24,11 +24,24 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.0 • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.1 • Multi Company • Double Entry</div></header>
 <div class="tabs">
-<button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
+<button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
+<div class="card" style="margin:12px 20px;padding:12px 16px">
+<div class="grid">
+<div><small class="muted">Current Company</small><div><b id="activeCompanyName">LJ Personal Accounts</b></div></div>
+<div><small class="muted">Financial Year</small><div><b id="activeFYName">2026-27</b></div></div>
+</div></div>
 <main>
+<section id="companies" class="hidden">
+<div class="card"><b>Company Management</b>
+<label>Company Name</label><input id="companyName" placeholder="e.g. Lalit Jain HUF">
+<label>Financial Year</label><input id="companyFY" placeholder="e.g. 2026-27">
+<div class="actions"><button class="primary" onclick="createCompany()">CREATE COMPANY</button></div>
+</div>
+<div class="card"><b>Companies / Financial Years</b><div id="companyList"></div></div>
+</section>
 <section id="home">
 <div class="grid">
 <div class="stat"><small>Cash Balance</small><strong id="cashBal">₹0</strong></div>
@@ -99,10 +112,16 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </main></div>
 <script>
 const K='ljpa_v1';
-let db=JSON.parse(localStorage.getItem(K)||'null')||{accounts:[
-{id:1,name:'Cash',group:'Cash',opening:0,otype:'Dr'},
-{id:2,name:'Bank',group:'Bank',opening:0,otype:'Dr'}
-],entries:[],nextA:3,nextE:1};
+const MK='ljpa_multi_v21';
+let legacy=JSON.parse(localStorage.getItem(K)||'null');
+let multi=JSON.parse(localStorage.getItem(MK)||'null');
+if(!multi){
+  let fy='2026-27';
+  multi={active:'c1',companies:{c1:{id:'c1',name:'LJ Personal Accounts',fy:fy,db:legacy||{accounts:[],entries:[],subgroups:[]}}}};
+  localStorage.setItem(MK,JSON.stringify(multi));
+}
+function activeCompany(){return multi.companies[multi.active]}
+let db=activeCompany().db;
 if(!Array.isArray(db.subgroups))db.subgroups=[];if(!db.nextSG)db.nextSG=1;
 function persist(){localStorage.setItem(K,JSON.stringify(db))}
 function money(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}
@@ -173,7 +192,57 @@ function renderSearch(){let out=document.getElementById('searchOut'),txt=documen
 function clearSearch(){document.getElementById('searchText').value='';document.getElementById('searchFrom').value='';document.getElementById('searchTo').value='';renderSearch()}
 function backup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='LJ_Accounts_Backup_'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(u)}
 function restore(inp){let f=inp.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.accounts||!x.entries)throw 0;if(confirm('Current data will be replaced by this backup. Continue?')){db=x;persist();renderAll();alert('Backup restored.')}}catch(e){alert('Invalid backup file.')}inp.value=''};r.readAsText(f)}
-function renderAll(){options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();renderAccounts();renderLedgerSuggestions();renderLedger();initFY();renderReports();renderAccountSuggestions();renderSearch()}
+
+function saveMulti(){activeCompany().db=db;localStorage.setItem(MK,JSON.stringify(multi));localStorage.setItem(K,JSON.stringify(db))}
+function createCompany(){
+ let name=(companyName.value||'').trim(),fy=(companyFY.value||'').trim();
+ if(!name)return alert('Enter Company Name');
+ if(!/^\d{4}-\d{2}$/.test(fy))return alert('Financial Year format must be like 2026-27');
+ let id='c'+Date.now();
+ multi.companies[id]={id,name,fy,db:{accounts:[],entries:[],subgroups:[]}};
+ multi.active=id;db=multi.companies[id].db;saveMulti();
+ companyName.value='';companyFY.value='';renderAll();show('companies');
+}
+function switchCompany(id){
+ if(!multi.companies[id])return;
+ saveMulti();multi.active=id;db=multi.companies[id].db;saveMulti();renderAll();show('home');
+}
+function editCompany(id){
+ let c=multi.companies[id];if(!c)return;
+ let n=prompt('Company Name',c.name);if(n===null)return;n=n.trim();if(!n)return;
+ let fy=prompt('Financial Year',c.fy);if(fy===null)return;fy=fy.trim();
+ if(!/^\d{4}-\d{2}$/.test(fy))return alert('Financial Year format must be like 2026-27');
+ c.name=n;c.fy=fy;saveMulti();renderCompanies();renderActiveCompany();
+}
+function deleteCompany(id){
+ let keys=Object.keys(multi.companies);if(keys.length<=1)return alert('At least one company must remain.');
+ let c=multi.companies[id];if(!c)return;
+ let ac=(c.db.accounts||[]).length,en=(c.db.entries||[]).length;
+ let msg=`Delete ${c.name} (${c.fy})?\nAccounts: ${ac}\nEntries: ${en}\n\nThis cannot be undone.`;
+ if(!confirm(msg))return;
+ delete multi.companies[id];
+ if(multi.active===id){multi.active=Object.keys(multi.companies)[0];db=multi.companies[multi.active].db}
+ saveMulti();renderAll();show('companies');
+}
+function renderCompanies(){
+ if(!window.companyList)return;
+ let cs=Object.values(multi.companies);
+ companyList.innerHTML=cs.map(c=>`<div class="card" style="margin:10px 0"><b>${esc(c.name)}</b><div class="muted">${esc(c.fy)}${c.id===multi.active?' • ACTIVE':''}</div><div class="actions"><button onclick="switchCompany('${c.id}')">Open</button><button onclick="editCompany('${c.id}')">Edit</button><button class="danger" onclick="deleteCompany('${c.id}')">Delete</button></div></div>`).join('');
+}
+function renderActiveCompany(){
+ let c=activeCompany();
+ if(window.activeCompanyName)activeCompanyName.textContent=c.name;
+ if(window.activeFYName)activeFYName.textContent=c.fy;
+}
+function renderAll(){renderCompanies();renderActiveCompany();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();renderAccounts();renderLedgerSuggestions();renderLedger();initFY();renderReports();renderAccountSuggestions();renderSearch()}
 date.value=new Date().toISOString().slice(0,10);renderAll();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+
+// V2.1 persistence bridge: existing accounting code can continue calling save().
+const _legacySave = (typeof save==='function') ? save : null;
+save=function(){
+  activeCompany().db=db;
+  localStorage.setItem(MK,JSON.stringify(multi));
+  localStorage.setItem(K,JSON.stringify(db));
+};
 </script></body></html>
