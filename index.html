@@ -24,7 +24,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V1.4.1 • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V1.4.2 • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -82,7 +82,7 @@ let db=JSON.parse(localStorage.getItem(K)||'null')||{accounts:[
 function persist(){localStorage.setItem(K,JSON.stringify(db))}
 function money(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}
 function show(id){document.querySelectorAll('main>section').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');renderAll()}
-function options(sel,include=true){let s=document.getElementById(sel);let val=s.value;s.innerHTML=db.accounts.map(a=>`<option value="${a.id}">${esc(a.name)} — ${a.group}</option>`).join('');if(val)s.value=val}
+function options(sel,include=true){let s=document.getElementById(sel);let val=s.value;s.innerHTML=db.accounts.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val)s.value=val}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function saveAccount(){let name=aname.value.trim(),id=+accountEditId.value;if(!name)return alert('Enter account name');if(db.accounts.some(a=>a.name.toLowerCase()==name.toLowerCase()&&a.id!==id))return alert('Account already exists');let data={name,group:agroup.value,opening:+aopen.value||0,otype:aotype.value};if(id){let a=acc(id);if(!a)return alert('Account not found');Object.assign(a,data)}else db.accounts.push({id:db.nextA++,...data});persist();cancelAccountEdit(false);renderAll()}
 function editAccount(id){let a=acc(id);if(!a)return;show('accounts');aname.value=a.name;agroup.value=a.group;aopen.value=a.opening||0;aotype.value=a.otype||'Dr';accountEditId.value=a.id;accountSaveBtn.textContent='UPDATE ACCOUNT';accountCancelBtn.classList.remove('hidden');aname.focus()}
