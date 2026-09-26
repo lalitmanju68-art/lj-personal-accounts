@@ -191,6 +191,16 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 .login-box{width:min(420px,100%);background:#fff;border-radius:16px;padding:22px;box-shadow:0 18px 55px rgba(0,0,0,.3)}
 @media print{#loginGate{display:none!important}}
 </style>
+
+<style>
+.confirm-title{text-align:center;font-size:22px;font-weight:900;letter-spacing:.4px}
+.confirm-sub{text-align:center;margin:5px 0 18px;color:#555}
+.confirm-parties,.signature-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:16px 0}
+.confirm-parties>div,.signature-grid>div{border:1px solid #ccd3dc;border-radius:10px;padding:14px;line-height:1.55}
+.confirm-declaration{margin:22px 0;padding:14px;border:1px solid #ccd3dc;border-radius:10px}
+@media(max-width:650px){.confirm-parties,.signature-grid{grid-template-columns:1fr}}
+@media print{.report-control{display:none!important}.confirmation-doc{box-shadow:none!important;border:0!important}.confirm-parties,.signature-grid{grid-template-columns:1fr 1fr!important}}
+</style>
 </head>
 <body><div id="loginGate" class="login-gate hidden">
 <div class="login-box">
@@ -202,7 +212,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <div id="loginMsg" class="muted"></div>
 </div></div>
 <div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.1.3 • Account Details + Quick Add • Data Safe</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.2 • Confirmation + Interest + BRS • Data Safe</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -295,6 +305,9 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
   <button onclick="selectReport('daybook')">Day Book</button>
   <button onclick="show('ledger')">Ledger</button>
   <button onclick="selectReport('trial')">Trial Balance</button>
+  <button onclick="selectReport('confirm')">Balance Confirmation Statement</button>
+  <button onclick="selectReport('interest')">Interest Calculator</button>
+  <button onclick="selectReport('brs')">Bank Reconciliation (BRS)</button>
   <button onclick="selectReport('summary')">Income & Expense Summary</button>
   <button onclick="selectReport('pl')">Profit & Loss Account</button>
   <button onclick="selectReport('bs')">Balance Sheet</button>
@@ -947,9 +960,93 @@ function selectReport(kind){
    out.innerHTML=reportPeriodHeader(map[kind])+(card?card.outerHTML:'<div class="card">Report not available.</div>');
    return;
  }
+ if(kind==='confirm'){out.innerHTML=reportPeriodHeader('Balance Confirmation Statement')+confirmationSetupHTML();return}
+ if(kind==='interest'){out.innerHTML=reportPeriodHeader('Interest Calculator')+interestSetupHTML();return}
+ if(kind==='brs'){out.innerHTML=reportPeriodHeader('Bank Reconciliation (BRS)')+brsSetupHTML();return}
  if(kind==='pl'){out.innerHTML=reportPeriodHeader('Profit & Loss Account')+profitLossHTML();return}
  if(kind==='bs'){out.innerHTML=reportPeriodHeader('Balance Sheet')+balanceSheetHTML();return}
 }
+
+function accountBalanceAsOn(a,to){
+ let b=(a.otype==='Dr'?a.opening:-a.opening);
+ for(let e of db.entries){if(to&&e.date>to)continue;if(e.dr==a.id)b+=e.amount;if(e.cr==a.id)b-=e.amount}
+ return b;
+}
+function partyOptions(){
+ return db.accounts.filter(a=>a.group==='Party / Person'||a.group==='Person').sort((a,b)=>a.name.localeCompare(b.name)).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
+}
+function confirmationSetupHTML(){
+ let c=activeCompany();
+ return `<div class="card report-control"><label>Party / Person</label><select id="confirmAcc"><option value="">Select Party</option>${partyOptions()}</select>
+ <div class="grid"><div><label>From Date</label><input type="date" id="confirmFrom" value="${c.from||''}"></div><div><label>To Date</label><input type="date" id="confirmTo" value="${c.to||''}"></div></div>
+ <label>Statement Type</label><select id="confirmType"><option value="summary">Summary Confirmation</option><option value="detailed">Detailed Confirmation</option></select>
+ <div class="actions"><button class="primary" onclick="generateConfirmation()">GENERATE STATEMENT</button></div></div><div id="confirmOut"></div>`;
+}
+function generateConfirmation(){
+ let a=acc(+document.getElementById('confirmAcc').value),from=document.getElementById('confirmFrom').value,to=document.getElementById('confirmTo').value,type=document.getElementById('confirmType').value,out=document.getElementById('confirmOut');
+ if(!a)return alert('Select Party / Person');
+ if(from&&to&&from>to)return alert('From Date cannot be after To Date');
+ let c=activeCompany(),opening=(a.otype==='Dr'?a.opening:-a.opening);
+ for(let e of db.entries){if(from&&e.date<from){if(e.dr==a.id)opening+=e.amount;if(e.cr==a.id)opening-=e.amount}}
+ let es=db.entries.filter(e=>(e.dr==a.id||e.cr==a.id)&&(!from||e.date>=from)&&(!to||e.date<=to)).sort((x,y)=>x.date.localeCompare(y.date)||x.id-y.id);
+ let dr=es.filter(e=>e.dr==a.id).reduce((z,e)=>z+e.amount,0),cr=es.filter(e=>e.cr==a.id).reduce((z,e)=>z+e.amount,0),closing=opening+dr-cr;
+ let details=type==='detailed'?`<h3>Transaction Details</h3><table><tr><th>Date</th><th>Particulars</th><th class="num">Debit</th><th class="num">Credit</th></tr>${es.map(e=>{let isDr=e.dr==a.id,other=acc(isDr?e.cr:e.dr);return `<tr><td>${idate(e.date)}</td><td>${esc(other?.name||'')}${e.narr?'<br><span class="muted">'+esc(e.narr)+'</span>':''}</td><td class="num">${isDr?money(e.amount):''}</td><td class="num">${!isDr?money(e.amount):''}</td></tr>`}).join('')||'<tr><td colspan="4">No transactions.</td></tr>'}</table>`:'';
+ out.innerHTML=`<div class="card confirmation-doc">
+ <div class="confirm-title">BALANCE CONFIRMATION STATEMENT</div><div class="confirm-sub">For the period ${from?idate(from):'Beginning'} to ${to?idate(to):'Today'}</div>
+ <div class="confirm-parties"><div><b>Our Details</b><br><strong>${esc(c.name)}</strong><br>${esc(c.address||'')}${c.address?'<br>':''}${c.mobile?'Mobile: '+esc(c.mobile)+'<br>':''}${c.pan?'PAN: '+esc(c.pan)+'<br>':''}${c.gst?'GST: '+esc(c.gst)+'<br>':''}${c.fssai?'FSSAI: '+esc(c.fssai):''}</div>
+ <div><b>Party Details</b><br><strong>${esc(a.name)}</strong><br>${esc(a.address||'')}${a.address?'<br>':''}${a.city?esc(a.city)+'<br>':''}${a.mobile?'Mobile: '+esc(a.mobile)+'<br>':''}${a.pan?'PAN: '+esc(a.pan):''}</div></div>
+ <table><tr><th>Particulars</th><th class="num">Amount</th></tr><tr><td>Opening Balance</td><td class="num">${money(Math.abs(opening))} ${opening>=0?'Dr':'Cr'}</td></tr><tr><td>Total Debit</td><td class="num">${money(dr)}</td></tr><tr><td>Total Credit</td><td class="num">${money(cr)}</td></tr><tr><th>Closing Balance</th><th class="num">${money(Math.abs(closing))} ${closing>=0?'Dr':'Cr'}</th></tr></table>
+ ${details}<div class="confirm-declaration"><b>BALANCE CONFIRMATION</b><p>I/We hereby confirm that the above balance and particulars are correct and agree with our books of accounts as on ${to?idate(to):'the above date'}.</p></div>
+ <div class="signature-grid"><div><b>For ${esc(c.name)}</b><br><br><br>Name: ${esc(c.name)}<br>PAN: ${esc(c.pan||'________________')}<br>Signature: __________________<br>Date: __________________</div><div><b>Confirmed By Party</b><br><br><br>Name: ${esc(a.name)}<br>PAN: ${esc(a.pan||'________________')}<br>Signature: __________________<br>Date: __________________</div></div></div>`;
+}
+function interestSetupHTML(){
+ let c=activeCompany();
+ return `<div class="card report-control"><label>Mode</label><select id="interestMode" onchange="interestModeUI()"><option value="ledger">Ledger-wise Interest</option><option value="simple">Simple Interest</option></select>
+ <div id="interestLedgerBox"><label>Party / Account</label><select id="interestAcc"><option value="">Select Account</option>${db.accounts.filter(a=>a.group!=='Income'&&a.group!=='Expense').sort((a,b)=>a.name.localeCompare(b.name)).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></div>
+ <div id="interestSimpleBox" class="hidden"><label>Principal Amount</label><input id="interestPrincipal" type="number" min="0" step="0.01"></div>
+ <div class="grid"><div><label>From Date</label><input type="date" id="interestFrom" value="${c.from||''}"></div><div><label>To Date</label><input type="date" id="interestTo" value="${c.to||''}"></div></div>
+ <label>Interest Rate % p.a.</label><input id="interestRate" type="number" min="0" step="0.01" value="12">
+ <div class="actions"><button class="primary" onclick="calculateInterest()">CALCULATE</button></div></div><div id="interestOut"></div>`;
+}
+function interestModeUI(){let simple=document.getElementById('interestMode').value==='simple';document.getElementById('interestLedgerBox').classList.toggle('hidden',simple);document.getElementById('interestSimpleBox').classList.toggle('hidden',!simple)}
+function dayDiff(a,b){return Math.max(0,Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000))}
+function calculateInterest(){
+ let mode=interestMode.value,from=interestFrom.value,to=interestTo.value,rate=+interestRate.value,out=interestOut;
+ if(!from||!to||from>to)return alert('Enter valid From and To dates');if(!(rate>=0))return alert('Enter valid interest rate');
+ if(mode==='simple'){let p=+interestPrincipal.value;if(!(p>=0))return alert('Enter principal amount');let days=dayDiff(from,to),interest=p*rate*days/36500;out.innerHTML=`<div class="card"><table><tr><th>Principal</th><td class="num">${money(p)}</td></tr><tr><th>Period</th><td>${idate(from)} to ${idate(to)} (${days} days)</td></tr><tr><th>Rate</th><td>${rate}% p.a.</td></tr><tr><th>Interest</th><td class="num"><b>${money(interest)}</b></td></tr></table></div>`;return}
+ let a=acc(+interestAcc.value);if(!a)return alert('Select Account');
+ let opening=(a.otype==='Dr'?a.opening:-a.opening);for(let e of db.entries){if(e.date<from){if(e.dr==a.id)opening+=e.amount;if(e.cr==a.id)opening-=e.amount}}
+ let tx=db.entries.filter(e=>(e.dr==a.id||e.cr==a.id)&&e.date>=from&&e.date<=to).sort((x,y)=>x.date.localeCompare(y.date)||x.id-y.id);
+ let points=[{date:from,part:'Opening Balance',change:0}],running=opening;for(let e of tx){let ch=e.dr==a.id?e.amount:-e.amount;points.push({date:e.date,part:acc(e.dr==a.id?e.cr:e.dr)?.name||'',change:ch})}
+ let rows='',total=0;running=opening;
+ for(let i=0;i<points.length;i++){let pt=points[i];if(i>0)running+=pt.change;let next=i+1<points.length?points[i+1].date:to;let days=dayDiff(pt.date,next);let intr=running*rate*days/36500;total+=intr;rows+=`<tr><td>${idate(pt.date)}</td><td>${esc(pt.part)}</td><td class="num">${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</td><td class="num">${days}</td><td class="num">${rate}%</td><td class="num">${money(intr)}</td></tr>`}
+ out.innerHTML=`<div class="card"><h3>${esc(a.name)} - Interest Calculation</h3><p class="muted">${idate(from)} to ${idate(to)}</p><table><tr><th>Date</th><th>Particulars</th><th class="num">Balance</th><th class="num">Days</th><th class="num">Rate</th><th class="num">Interest</th></tr>${rows}<tr><th colspan="5">Net Interest</th><th class="num">${money(total)}</th></tr></table><p class="muted">Positive interest is on Debit balance; negative interest is on Credit balance. Calculation uses 365 days.</p></div>`;
+}
+const BRS_KEY='ljpa_brs_v32';
+function brsStore(){try{return JSON.parse(localStorage.getItem(BRS_KEY)||'{}')}catch(e){return {}}}
+function saveBrsStore(x){localStorage.setItem(BRS_KEY,JSON.stringify(x))}
+function brsSetupHTML(){
+ let c=activeCompany(),banks=db.accounts.filter(a=>a.group==='Bank').sort((a,b)=>a.name.localeCompare(b.name));
+ return `<div class="card report-control"><label>Bank Account</label><select id="brsBank"><option value="">Select Bank</option>${banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select>
+ <label>Reconciliation Date</label><input type="date" id="brsDate" value="${c.to||new Date().toISOString().slice(0,10)}">
+ <div class="actions"><button class="primary" onclick="loadBRS()">LOAD BRS</button></div></div><div id="brsOut"></div>`;
+}
+function loadBRS(){
+ let bank=acc(+brsBank.value),to=brsDate.value,out=brsOut;if(!bank)return alert('Select Bank Account');if(!to)return alert('Select Reconciliation Date');
+ let es=db.entries.filter(e=>(e.dr==bank.id||e.cr==bank.id)&&e.date<=to).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id),store=brsStore(),prefix=companyFamilyKey(activeCompany())+'|'+bank.id+'|';
+ let rows=es.map(e=>{let k=prefix+e.id,r=store[k]||{},isDr=e.dr==bank.id,other=acc(isDr?e.cr:e.dr);return `<tr><td>${idate(e.date)}</td><td>${esc(other?.name||'')}<br><span class="muted">${esc(e.narr||'')}</span></td><td class="num">${isDr?money(e.amount):''}</td><td class="num">${!isDr?money(e.amount):''}</td><td style="text-align:center"><input type="checkbox" ${r.cleared?'checked':''} onchange="setBRSCleared('${k}',this.checked)"></td><td><input type="date" value="${esc(r.date||'')}" onchange="setBRSDate('${k}',this.value)"></td></tr>`}).join('');
+ out.innerHTML=`<div class="card"><h3>${esc(bank.name)} - Bank Reconciliation</h3><p class="muted">As on ${idate(to)}</p><div id="brsSummary"></div><table><tr><th>Book Date</th><th>Particulars</th><th class="num">Deposit / Dr</th><th class="num">Payment / Cr</th><th>Cleared</th><th>Clearing Date</th></tr>${rows||'<tr><td colspan="6">No bank transactions.</td></tr>'}</table></div>`;renderBRSSummary();
+}
+function setBRSCleared(k,v){let s=brsStore();s[k]=s[k]||{};s[k].cleared=v;if(!v)s[k].date='';saveBrsStore(s);renderBRSSummary()}
+function setBRSDate(k,v){let s=brsStore();s[k]=s[k]||{};s[k].date=v;s[k].cleared=!!v;saveBrsStore(s);loadBRS()}
+function renderBRSSummary(){
+ if(!window.brsBank||!window.brsDate||!window.brsSummary)return;let bank=acc(+brsBank.value),to=brsDate.value;if(!bank)return;
+ let book=accountBalanceAsOn(bank,to),s=brsStore(),prefix=companyFamilyKey(activeCompany())+'|'+bank.id+'|',uncDr=0,uncCr=0;
+ for(let e of db.entries.filter(e=>(e.dr==bank.id||e.cr==bank.id)&&e.date<=to)){let r=s[prefix+e.id]||{};let cleared=r.cleared&&(!r.date||r.date<=to);if(!cleared){if(e.dr==bank.id)uncDr+=e.amount;else uncCr+=e.amount}}
+ let reconciled=book-uncDr+uncCr;
+ brsSummary.innerHTML=`<table><tr><th>Books Balance</th><td class="num">${money(Math.abs(book))} ${book>=0?'Dr':'Cr'}</td></tr><tr><td>Less: Deposits not cleared</td><td class="num">${money(uncDr)}</td></tr><tr><td>Add: Payments not cleared</td><td class="num">${money(uncCr)}</td></tr><tr><th>Reconciled / Expected Bank Balance</th><th class="num">${money(Math.abs(reconciled))} ${reconciled>=0?'Dr':'Cr'}</th></tr></table><p class="muted">Tick a transaction only after it appears in the bank statement. Clearing status is saved on this device.</p>`;
+}
+
 function reportEntries(){
  let f=window.repFrom&&repFrom.value?repFrom.value:activeCompany().from;
  let t=window.repTo&&repTo.value?repTo.value:activeCompany().to;
