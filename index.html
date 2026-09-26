@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="gu">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="manifest.json">
+<title>LJ Personal Accounts</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Noto Sans Gujarati",sans-serif;color:#171717;background:#f5f5f5}
+*{box-sizing:border-box} body{margin:0}.app{max-width:760px;margin:auto;min-height:100vh;background:#fff}
+header{position:sticky;top:0;background:#fff;border-bottom:1px solid #ddd;padding:14px 16px;z-index:2}
+header b{font-size:20px}.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:10px;background:#fafafa;position:sticky;top:54px;z-index:2}
+button,.btn{border:1px solid #bbb;background:#fff;border-radius:10px;padding:11px 8px;font-weight:650}
+button.primary{background:#111;color:#fff;border-color:#111}.tabs button{font-size:12px;padding:9px 3px}
+main{padding:14px}.card{border:1px solid #ddd;border-radius:14px;padding:14px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{background:#f7f7f7;border-radius:12px;padding:12px}
+.stat small{display:block;color:#666}.stat strong{font-size:19px}
+label{display:block;font-size:13px;color:#555;margin:10px 0 5px}
+input,select,textarea{width:100%;padding:12px;border:1px solid #bbb;border-radius:10px;font:inherit;background:#fff}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;border-bottom:1px solid #eee;text-align:left}td.num,th.num{text-align:right}
+.hidden{display:none}.muted{color:#777;font-size:13px}.danger{color:#a00}.pill{display:inline-block;padding:3px 7px;background:#eee;border-radius:999px;font-size:11px}
+@media(max-width:480px){.grid{grid-template-columns:1fr 1fr}.row{grid-template-columns:1fr}.tabs{grid-template-columns:repeat(5,1fr)}}
+</style>
+</head>
+<body><div class="app">
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V1.3 • Double Entry</div></header>
+<div class="tabs">
+<button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
+</div>
+<main>
+<section id="home">
+<div class="grid">
+<div class="stat"><small>Cash Balance</small><strong id="cashBal">₹0</strong></div>
+<div class="stat"><small>Bank Balance</small><strong id="bankBal">₹0</strong></div>
+<div class="stat"><small>Total Debit</small><strong id="totalDr">₹0</strong></div>
+<div class="stat"><small>Total Credit</small><strong id="totalCr">₹0</strong></div>
+</div>
+<div class="card"><b>Recent Entries</b><div id="recent"></div></div>
+</section>
+
+<section id="entry" class="hidden">
+<div class="card"><b>New Transaction</b>
+<label>Date</label><input type="date" id="date">
+<label>Voucher Type</label><select id="vtype" onchange="voucherUI()"><option>Cash</option><option>Bank</option><option>Journal</option><option>Contra</option></select>
+<div id="normalAccounts" class="row"><div><label>Debit Account</label><select id="dr"></select></div><div><label>Credit Account</label><select id="cr"></select></div></div>
+<div id="contraBox" class="hidden"><label>Contra Direction</label><select id="contraDir" onchange="contraUI()"><option value="bankToCash">Bank → Cash</option><option value="cashToBank">Cash → Bank</option><option value="bankToBank">Bank → Bank</option></select><label id="bank1Label">Bank Account</label><select id="contraBank"></select><div id="bank2Wrap" class="hidden"><label>To Bank</label><select id="contraBank2"></select></div></div>
+<label>Amount</label><input id="amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">
+<label>Narration</label><textarea id="narr" rows="2" placeholder="Optional details"></textarea>
+<input type="hidden" id="editId"><div class="actions"><button class="primary" id="saveBtn" onclick="saveEntry()">SAVE ENTRY</button><button onclick="resetEntry()">Clear</button></div>
+<div id="entryMsg" class="muted"></div>
+</div></section>
+
+<section id="accounts" class="hidden">
+<div class="card"><b>Add Account</b>
+<label>Account Name</label><input id="aname" placeholder="e.g. HDFC Bank">
+<label>Group</label><select id="agroup"><option>Cash</option><option>Bank</option><option>Person</option><option>Income</option><option>Expense</option><option>Asset</option><option>Liability</option></select>
+<div class="row"><div><label>Opening Balance</label><input id="aopen" type="number" step="0.01" value="0"></div><div><label>Opening Type</label><select id="aotype"><option>Dr</option><option>Cr</option></select></div></div>
+<div class="actions"><button class="primary" onclick="addAccount()">ADD ACCOUNT</button></div>
+</div>
+<div class="card"><b>Account List</b><div id="accountList"></div></div>
+</section>
+
+<section id="ledger" class="hidden">
+<div class="card"><b>Ledger</b><label>Select Account</label><select id="ledgerAcc" onchange="renderLedger()"></select><div id="ledgerOut"></div></div>
+</section>
+
+<section id="reports" class="hidden">
+<div class="card"><b>Day Book</b><div id="daybook"></div></div>
+<div class="card"><b>Trial Balance</b><div id="trial"></div></div>
+<div class="card"><b>Backup / Restore</b><p class="muted">Keep a backup file outside the browser. Clearing browser data can erase local records.</p>
+<div class="actions"><button onclick="backup()">Export Backup</button><label class="btn">Restore Backup<input class="hidden" type="file" id="restoreFile" accept=".json,application/json" onchange="restore(this)"></label></div>
+</div>
+</section>
+</main></div>
+<script>
+const K='ljpa_v1';
+let db=JSON.parse(localStorage.getItem(K)||'null')||{accounts:[
+{id:1,name:'Cash',group:'Cash',opening:0,otype:'Dr'},
+{id:2,name:'Bank',group:'Bank',opening:0,otype:'Dr'}
+],entries:[],nextA:3,nextE:1};
+function persist(){localStorage.setItem(K,JSON.stringify(db))}
+function money(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}
+function show(id){document.querySelectorAll('main>section').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');renderAll()}
+function options(sel,include=true){let s=document.getElementById(sel);let val=s.value;s.innerHTML=db.accounts.map(a=>`<option value="${a.id}">${esc(a.name)} — ${a.group}</option>`).join('');if(val)s.value=val}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function addAccount(){let name=aname.value.trim();if(!name)return alert('Enter account name');if(db.accounts.some(a=>a.name.toLowerCase()==name.toLowerCase()))return alert('Account already exists');db.accounts.push({id:db.nextA++,name,group:agroup.value,opening:+aopen.value||0,otype:aotype.value});persist();aname.value='';aopen.value=0;renderAll()}
+function voucherUI(){let is=vtype.value==='Contra';normalAccounts.classList.toggle('hidden',is);contraBox.classList.toggle('hidden',!is);contraUI()}
+function contraUI(){if(!window.contraDir)return;let bb=contraDir.value==='bankToBank';let w=document.getElementById('bank2Wrap');let l=document.getElementById('bank1Label');if(w)w.classList.toggle('hidden',!bb);if(l)l.textContent=bb?'From Bank':'Bank Account'}
+function saveEntry(){let d,c,a=+amount.value;if(vtype.value==='Contra'){if(contraDir.value==='bankToBank'){let from=acc(+contraBank.value),to=acc(+contraBank2.value);if(!from||!to||from.group!=='Bank'||to.group!=='Bank')return alert('Select both bank accounts');if(from.id===to.id)return alert('From Bank and To Bank cannot be same');d=to.id;c=from.id}else{let cash=db.accounts.find(x=>x.group==='Cash'),bank=acc(+contraBank.value);if(!cash||!bank)return alert('Cash and Bank account are required');if(contraDir.value==='bankToCash'){d=cash.id;c=bank.id}else{d=bank.id;c=cash.id}}}else{d=+dr.value;c=+cr.value}if(!date.value||!d||!c||!(a>0))return alert('Date, accounts and Amount are required');if(d===c)return alert('Debit and Credit account cannot be same');let id=+editId.value;let item={id:id||db.nextE++,date:date.value,type:vtype.value,dr:d,cr:c,amount:a,narr:narr.value.trim(),created:new Date().toISOString()};if(id){let i=db.entries.findIndex(e=>e.id==id);if(i>=0)db.entries[i]=item}else db.entries.push(item);persist();entryMsg.textContent=id?'Entry updated successfully.':'Entry saved successfully.';resetEntry(false);renderAll()}
+function resetEntry(clearMsg=true){amount.value='';narr.value='';editId.value='';saveBtn.textContent='SAVE ENTRY';if(clearMsg)entryMsg.textContent='';voucherUI()}
+function editEntry(id){let e=db.entries.find(x=>x.id==id);if(!e)return;show('entry');date.value=e.date;vtype.value=e.type;amount.value=e.amount;narr.value=e.narr||'';editId.value=e.id;saveBtn.textContent='UPDATE ENTRY';if(e.type==='Contra'){if(acc(e.dr)?.group==='Cash'){contraDir.value='bankToCash';contraBank.value=e.cr}else{contraDir.value='cashToBank';contraBank.value=e.dr}}else{dr.value=e.dr;cr.value=e.cr}voucherUI()}
+function deleteEntry(id){if(!confirm('Delete this entry?'))return;db.entries=db.entries.filter(e=>e.id!=id);persist();renderAll()}
+function acc(id){return db.accounts.find(a=>a.id==id)}
+function bal(a){let b=(a.otype==='Dr'?a.opening:-a.opening);for(let e of db.entries){if(e.dr==a.id)b+=e.amount;if(e.cr==a.id)b-=e.amount}return b}
+function renderHome(){let cash=db.accounts.filter(a=>a.group==='Cash').reduce((s,a)=>s+bal(a),0), bank=db.accounts.filter(a=>a.group==='Bank').reduce((s,a)=>s+bal(a),0),sum=db.entries.reduce((s,e)=>s+e.amount,0);cashBal.textContent=money(cash);bankBal.textContent=money(bank);totalDr.textContent=money(sum);totalCr.textContent=money(sum);let es=[...db.entries].sort((a,b)=>b.id-a.id).slice(0,5);recent.innerHTML=es.length?`<table>${es.map(e=>`<tr><td>${e.date}<br><span class="pill">${e.type}</span></td><td>${esc(acc(e.dr)?.name||'')} → ${esc(acc(e.cr)?.name||'')}<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${money(e.amount)}</td></tr>`).join('')}</table>`:'<p class="muted">No entries yet.</p>'}
+function renderAccounts(){accountList.innerHTML=`<table><tr><th>Account</th><th>Group</th><th class="num">Balance</th></tr>${db.accounts.map(a=>{let b=bal(a);return `<tr><td>${esc(a.name)}</td><td>${a.group}</td><td class="num">${money(Math.abs(b))} ${b>=0?'Dr':'Cr'}</td></tr>`}).join('')}</table>`}
+function renderLedger(){let id=+ledgerAcc.value,a=acc(id);if(!a){ledgerOut.innerHTML='';return}let rows=db.entries.filter(e=>e.dr==id||e.cr==id).sort((x,y)=>x.date.localeCompare(y.date)||x.id-y.id), running=(a.otype==='Dr'?a.opening:-a.opening);let html=`<p class="muted">Opening: ${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</p><table><tr><th>Date / Particular</th><th class="num">Dr</th><th class="num">Cr</th><th class="num">Balance</th></tr>`;for(let e of rows){let isdr=e.dr==id;running+=isdr?e.amount:-e.amount;html+=`<tr><td>${e.date}<br>${esc(acc(isdr?e.cr:e.dr)?.name||'')}<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${isdr?money(e.amount):''}</td><td class="num">${!isdr?money(e.amount):''}</td><td class="num">${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</td></tr>`}ledgerOut.innerHTML=html+'</table>'}
+function renderReports(){let es=[...db.entries].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);daybook.innerHTML=es.length?`<table><tr><th>Date</th><th>Entry</th><th class="num">Amount</th></tr>${es.map(e=>`<tr><td>${e.date}</td><td>${esc(acc(e.dr)?.name)} Dr<br>${esc(acc(e.cr)?.name)} Cr<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${money(e.amount)}</td></tr>`).join('')}</table>`:'<p class="muted">No entries.</p>';let td=0,tc=0;let rows=db.accounts.map(a=>{let b=bal(a);if(b>=0)td+=b;else tc+=-b;return `<tr><td>${esc(a.name)}</td><td class="num">${b>=0?money(b):''}</td><td class="num">${b<0?money(-b):''}</td></tr>`}).join('');trial.innerHTML=`<table><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr>${rows}<tr><th>Total</th><th class="num">${money(td)}</th><th class="num">${money(tc)}</th></tr></table>`}
+function backup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='LJ_Accounts_Backup_'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(u)}
+function restore(inp){let f=inp.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.accounts||!x.entries)throw 0;if(confirm('Current data will be replaced by this backup. Continue?')){db=x;persist();renderAll();alert('Backup restored.')}}catch(e){alert('Invalid backup file.')}inp.value=''};r.readAsText(f)}
+function renderAll(){options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}voucherUI();renderHome();renderAccounts();renderLedger();renderReports()}
+date.value=new Date().toISOString().slice(0,10);renderAll();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script></body></html>
