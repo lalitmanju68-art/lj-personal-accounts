@@ -24,7 +24,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V1.6 • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V1.6.1 • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -109,7 +109,10 @@ function renderReports(){
 let es=[...db.entries].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
 daybook.innerHTML=es.length?`<table><tr><th>Date</th><th>Entry</th><th class="num">Amount</th></tr>${es.map(e=>`<tr><td>${e.date}</td><td>${esc(acc(e.dr)?.name)} Dr<br>${esc(acc(e.cr)?.name)} Cr<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${money(e.amount)}</td></tr>`).join('')}</table>`:'<p class="muted">No entries.</p>';
 let td=0,tc=0;let rows=db.accounts.map(a=>{let b=bal(a);if(b>=0)td+=b;else tc+=-b;return `<tr><td>${esc(a.name)}</td><td class="num">${b>=0?money(b):''}</td><td class="num">${b<0?money(-b):''}</td></tr>`}).join('');
-trial.innerHTML=`<table><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr>${rows}<tr><th>Total</th><th class="num">${money(td)}</th><th class="num">${money(tc)}</th></tr></table>`;
+let diff=td-tc;
+let adj=diff>0?`<tr><td><b>Opening Balance Difference</b></td><td class="num"></td><td class="num"><b>${money(diff)}</b></td></tr>`:diff<0?`<tr><td><b>Opening Balance Difference</b></td><td class="num"><b>${money(-diff)}</b></td><td class="num"></td></tr>`:'';
+let ftd=td+(diff<0?-diff:0),ftc=tc+(diff>0?diff:0);
+trial.innerHTML=`<table><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr>${rows}${adj}<tr><th>Total</th><th class="num">${money(ftd)}</th><th class="num">${money(ftc)}</th></tr></table>${diff?'<p class="muted">Opening Balance Difference keeps the Trial Balance equal. Contra entries remain fully reflected in the individual bank balances.</p>':''}`;
 if(!window.repFrom||!window.repTo||!window.incomeExpense)return;
 if(!repTo.value)repTo.value=new Date().toISOString().slice(0,10);
 if(!repFrom.value){let d=new Date();d.setDate(1);repFrom.value=d.toISOString().slice(0,10)}
