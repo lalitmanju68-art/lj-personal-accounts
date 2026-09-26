@@ -212,7 +212,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <div id="loginMsg" class="muted"></div>
 </div></div>
 <div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.2 • Confirmation + Interest + BRS • Data Safe</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.2.1 • Confirmation Party Fix • Data Safe</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -973,7 +973,8 @@ function accountBalanceAsOn(a,to){
  return b;
 }
 function partyOptions(){
- return db.accounts.filter(a=>a.group==='Party / Person'||a.group==='Person').sort((a,b)=>a.name.localeCompare(b.name)).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
+ const excluded=['Cash','Bank','Income','Expense'];
+ return db.accounts.filter(a=>!excluded.includes(a.group)).sort((a,b)=>a.name.localeCompare(b.name)).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
 }
 function confirmationSetupHTML(){
  let c=activeCompany();
