@@ -24,7 +24,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V1.7 • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V1.8 • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -62,18 +62,19 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </section>
 
 <section id="ledger" class="hidden">
-<div class="card"><b>Ledger</b><label>Select Account</label><select id="ledgerAcc" onchange="renderLedger()"></select><div id="ledgerOut"></div></div>
+<div class="card"><b>Ledger</b><label>Select Account</label><select id="ledgerAcc" onchange="renderLedger()"></select>
+<div class="grid"><div><label>From Date</label><input type="date" id="ledgerFrom" onchange="renderLedger()"></div><div><label>To Date</label><input type="date" id="ledgerTo" onchange="renderLedger()"></div></div>
+<div id="ledgerOut"></div></div>
 </section>
 
 <section id="reports" class="hidden">
+<div class="card"><b>Financial Year / Report Period</b>
+<label>Financial Year</label><select id="fySelect" onchange="applyFY()"></select>
+<div class="grid"><div><label>From Date</label><input type="date" id="repFrom" onchange="renderReports()"></div><div><label>To Date</label><input type="date" id="repTo" onchange="renderReports()"></div></div>
+</div>
 <div class="card"><b>Day Book</b><div id="daybook"></div></div>
 <div class="card"><b>Trial Balance</b><div id="trial"></div></div>
-<div class="card"><b>Income / Expense Summary</b>
-<div class="grid">
-<div><label>From Date</label><input type="date" id="repFrom" onchange="renderReports()"></div>
-<div><label>To Date</label><input type="date" id="repTo" onchange="renderReports()"></div>
-</div>
-<div id="incomeExpense"></div></div>
+<div class="card"><b>Income / Expense Summary</b><div id="incomeExpense"></div></div>
 <div class="card"><b>Backup / Restore</b><p class="muted">Keep a backup file outside the browser. Clearing browser data can erase local records.</p>
 <div class="actions"><button onclick="backup()">Export Backup</button><label class="btn">Restore Backup<input class="hidden" type="file" id="restoreFile" accept=".json,application/json" onchange="restore(this)"></label></div>
 </div>
@@ -104,45 +105,38 @@ function acc(id){return db.accounts.find(a=>a.id==id)}
 function bal(a){let b=(a.otype==='Dr'?a.opening:-a.opening);for(let e of db.entries){if(e.dr==a.id)b+=e.amount;if(e.cr==a.id)b-=e.amount}return b}
 function renderHome(){let cash=db.accounts.filter(a=>a.group==='Cash').reduce((s,a)=>s+bal(a),0), bank=db.accounts.filter(a=>a.group==='Bank').reduce((s,a)=>s+bal(a),0),sum=db.entries.reduce((s,e)=>s+e.amount,0);cashBal.textContent=money(cash);bankBal.textContent=money(bank);totalDr.textContent=money(sum);totalCr.textContent=money(sum);let es=[...db.entries].sort((a,b)=>b.id-a.id).slice(0,5);recent.innerHTML=es.length?`<table>${es.map(e=>`<tr><td>${e.date}<br><span class="pill">${e.type}</span></td><td>${esc(acc(e.dr)?.name||'')} → ${esc(acc(e.cr)?.name||'')}<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${money(e.amount)}<br><button onclick="editEntry(${e.id})">Edit</button> <button class="danger" onclick="deleteEntry(${e.id})">Delete</button></td></tr>`).join('')}</table>`:'<p class="muted">No entries yet.</p>'}
 function renderAccounts(){accountList.innerHTML=`<table><tr><th>Account</th><th>Group</th><th class="num">Balance</th><th>Action</th></tr>${db.accounts.map(a=>{let b=bal(a),system=a.id===1||a.id===2,used=db.entries.some(e=>e.dr===a.id||e.cr===a.id);return `<tr><td>${esc(a.name)}</td><td>${esc(a.group)}</td><td class="num">${money(Math.abs(b))} ${b>=0?'Dr':'Cr'}</td><td><button onclick="editAccount(${a.id})">Edit</button> ${system||used?'':`<button class="danger" onclick="deleteAccount(${a.id})">Delete</button>`}</td></tr>`}).join('')}</table>`}
-function renderLedger(){let id=+ledgerAcc.value,a=acc(id);if(!a){ledgerOut.innerHTML='';return}let rows=db.entries.filter(e=>e.dr==id||e.cr==id).sort((x,y)=>x.date.localeCompare(y.date)||x.id-y.id), running=(a.otype==='Dr'?a.opening:-a.opening);let html=`<p class="muted">Opening: ${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</p><table><tr><th>Date / Particular</th><th class="num">Dr</th><th class="num">Cr</th><th class="num">Balance</th><th>Action</th></tr>`;for(let e of rows){let isdr=e.dr==id;running+=isdr?e.amount:-e.amount;html+=`<tr><td>${e.date}<br>${esc(acc(isdr?e.cr:e.dr)?.name||'')}<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${isdr?money(e.amount):''}</td><td class="num">${!isdr?money(e.amount):''}</td><td class="num">${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</td><td><button onclick="editEntry(${e.id})">Edit</button> <button class="danger" onclick="deleteEntry(${e.id})">Delete</button></td></tr>`}ledgerOut.innerHTML=html+'</table>'}
+function renderLedger(){let id=+ledgerAcc.value,a=acc(id);if(!a){ledgerOut.innerHTML='';return}let from=window.ledgerFrom?ledgerFrom.value:'',to=window.ledgerTo?ledgerTo.value:'';let all=db.entries.filter(e=>e.dr==id||e.cr==id).sort((x,y)=>x.date.localeCompare(y.date)||x.id-y.id),running=(a.otype==='Dr'?a.opening:-a.opening);if(from){for(let e of all.filter(e=>e.date<from))running+=(e.dr==id?e.amount:-e.amount)}let rows=all.filter(e=>(!from||e.date>=from)&&(!to||e.date<=to));let html=`<p class="muted">${from||'Beginning'} to ${to||'Today'} • Opening: ${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</p><table><tr><th>Date / Particular</th><th class="num">Dr</th><th class="num">Cr</th><th class="num">Balance</th><th>Action</th></tr>`;for(let e of rows){let isdr=e.dr==id;running+=isdr?e.amount:-e.amount;html+=`<tr><td>${e.date}<br>${esc(acc(isdr?e.cr:e.dr)?.name||'')}<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${isdr?money(e.amount):''}</td><td class="num">${!isdr?money(e.amount):''}</td><td class="num">${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</td><td><button onclick="editEntry(${e.id})">Edit</button> <button class="danger" onclick="deleteEntry(${e.id})">Delete</button></td></tr>`}ledgerOut.innerHTML=html+'</table>'}
+function fyForDate(d){let x=new Date(d+'T00:00:00'),y=x.getFullYear();if(x.getMonth()<3)y--;return y}
+function fyLabel(y){return `${y}-${String(y+1).slice(-2)}`}
+function fyRange(y){return {from:`${y}-04-01`,to:`${y+1}-03-31`}}
+function initFY(){if(!window.fySelect)return;let now=new Date().toISOString().slice(0,10),years=db.entries.map(e=>fyForDate(e.date)).filter(Number.isFinite);years.push(fyForDate(now));let min=Math.min(...years),max=Math.max(...years),old=fySelect.value;fySelect.innerHTML='';for(let y=max;y>=min;y--){let o=document.createElement('option');o.value=y;o.textContent=fyLabel(y);fySelect.appendChild(o)}fySelect.value=old&&[...fySelect.options].some(o=>o.value===old)?old:fyForDate(now);if(!repFrom.value&&!repTo.value){let r=fyRange(+fySelect.value);repFrom.value=r.from;repTo.value=r.to}}
+function applyFY(){let r=fyRange(+fySelect.value);repFrom.value=r.from;repTo.value=r.to;renderReports()}
 function renderReports(){
-let es=[...db.entries].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+if(!window.repFrom||!window.repTo||!window.incomeExpense)return;
+if(window.fySelect&&!fySelect.options.length)initFY();
+let from=repFrom.value,to=repTo.value,periodEntries=db.entries.filter(e=>(!from||e.date>=from)&&(!to||e.date<=to));
+let es=[...periodEntries].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
 daybook.innerHTML=es.length?`<table><tr><th>Date</th><th>Entry</th><th class="num">Amount</th></tr>${es.map(e=>`<tr><td>${e.date}</td><td>${esc(acc(e.dr)?.name)} Dr<br>${esc(acc(e.cr)?.name)} Cr<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${money(e.amount)}</td></tr>`).join('')}</table>`:'<p class="muted">No entries.</p>';
-let td=0,tc=0,moveDr=0,moveCr=0;
+let moveDr=0,moveCr=0;
 let rows=db.accounts.map(a=>{
  let opening=(a.otype==='Dr'?a.opening:-a.opening);
- let edr=db.entries.filter(e=>e.dr==a.id).reduce((z,e)=>z+e.amount,0);
- let ecr=db.entries.filter(e=>e.cr==a.id).reduce((z,e)=>z+e.amount,0);
- let b=opening+edr-ecr;
- moveDr+=edr;moveCr+=ecr;
- if(b>=0)td+=b;else tc+=-b;
+ if(from){for(let e of db.entries){if(e.date<from){if(e.dr==a.id)opening+=e.amount;if(e.cr==a.id)opening-=e.amount}}}
+ let edr=periodEntries.filter(e=>e.dr==a.id).reduce((z,e)=>z+e.amount,0);
+ let ecr=periodEntries.filter(e=>e.cr==a.id).reduce((z,e)=>z+e.amount,0);
+ let b=opening+edr-ecr;moveDr+=edr;moveCr+=ecr;
  return `<tr><td>${esc(a.name)}</td><td class="num">${opening?money(Math.abs(opening))+' '+(opening>=0?'Dr':'Cr'):''}</td><td class="num">${edr?money(edr):''}</td><td class="num">${ecr?money(ecr):''}</td><td class="num">${money(Math.abs(b))} ${b>=0?'Dr':'Cr'}</td></tr>`
 }).join('');
-trial.innerHTML=`<table><tr><th>Account</th><th class="num">Opening</th><th class="num">Txn Dr</th><th class="num">Txn Cr</th><th class="num">Closing</th></tr>${rows}<tr><th>Transaction Total</th><th></th><th class="num">${money(moveDr)}</th><th class="num">${money(moveCr)}</th><th></th></tr></table><p class="muted">Contra effect is shown separately in Txn Dr / Txn Cr. Every Contra must add the same amount to total transaction Debit and Credit.</p>`;
-if(!window.repFrom||!window.repTo||!window.incomeExpense)return;
-if(!repTo.value)repTo.value=new Date().toISOString().slice(0,10);
-if(!repFrom.value){let d=new Date();d.setDate(1);repFrom.value=d.toISOString().slice(0,10)}
-let from=repFrom.value,to=repTo.value,filtered=db.entries.filter(e=>(!from||e.date>=from)&&(!to||e.date<=to));
-let groups={Income:0,Expense:0};
-let details={Income:{},Expense:{}};
-for(let e of filtered){
- let da=acc(e.dr),ca=acc(e.cr);
- if(da?.group==='Expense'){groups.Expense+=e.amount;details.Expense[da.name]=(details.Expense[da.name]||0)+e.amount}
- if(ca?.group==='Expense'){groups.Expense-=e.amount;details.Expense[ca.name]=(details.Expense[ca.name]||0)-e.amount}
- if(ca?.group==='Income'){groups.Income+=e.amount;details.Income[ca.name]=(details.Income[ca.name]||0)+e.amount}
- if(da?.group==='Income'){groups.Income-=e.amount;details.Income[da.name]=(details.Income[da.name]||0)-e.amount}
-}
+trial.innerHTML=`<p class="muted">${from||'Beginning'} to ${to||'Today'}</p><table><tr><th>Account</th><th class="num">Opening</th><th class="num">Txn Dr</th><th class="num">Txn Cr</th><th class="num">Closing</th></tr>${rows}<tr><th>Transaction Total</th><th></th><th class="num">${money(moveDr)}</th><th class="num">${money(moveCr)}</th><th></th></tr></table><p class="muted">Contra effect is shown separately in Txn Dr / Txn Cr. Every Contra must add the same amount to total transaction Debit and Credit.</p>`;
+let groups={Income:0,Expense:0},details={Income:{},Expense:{}};
+for(let e of periodEntries){let da=acc(e.dr),ca=acc(e.cr);if(da?.group==='Expense'){groups.Expense+=e.amount;details.Expense[da.name]=(details.Expense[da.name]||0)+e.amount}if(ca?.group==='Expense'){groups.Expense-=e.amount;details.Expense[ca.name]=(details.Expense[ca.name]||0)-e.amount}if(ca?.group==='Income'){groups.Income+=e.amount;details.Income[ca.name]=(details.Income[ca.name]||0)+e.amount}if(da?.group==='Income'){groups.Income-=e.amount;details.Income[da.name]=(details.Income[da.name]||0)-e.amount}}
 let incRows=Object.entries(details.Income).filter(x=>x[1]).map(([n,v])=>`<tr><td>${esc(n)}</td><td class="num">${money(v)}</td></tr>`).join('');
 let expRows=Object.entries(details.Expense).filter(x=>x[1]).map(([n,v])=>`<tr><td>${esc(n)}</td><td class="num">${money(v)}</td></tr>`).join('');
 let net=groups.Income-groups.Expense;
-incomeExpense.innerHTML=`<p class="muted">${from||'Beginning'} to ${to||'Today'}</p>
-<table><tr><th>Income Account</th><th class="num">Amount</th></tr>${incRows||'<tr><td colspan="2">No income entries.</td></tr>'}<tr><th>Total Income</th><th class="num">${money(groups.Income)}</th></tr></table>
-<table><tr><th>Expense Account</th><th class="num">Amount</th></tr>${expRows||'<tr><td colspan="2">No expense entries.</td></tr>'}<tr><th>Total Expense</th><th class="num">${money(groups.Expense)}</th></tr></table>
-<p><b>Net ${net>=0?'Surplus':'Deficit'}: ${money(Math.abs(net))}</b></p>`;
+incomeExpense.innerHTML=`<p class="muted">${from||'Beginning'} to ${to||'Today'}</p><table><tr><th>Income Account</th><th class="num">Amount</th></tr>${incRows||'<tr><td colspan="2">No income entries.</td></tr>'}<tr><th>Total Income</th><th class="num">${money(groups.Income)}</th></tr></table><table><tr><th>Expense Account</th><th class="num">Amount</th></tr>${expRows||'<tr><td colspan="2">No expense entries.</td></tr>'}<tr><th>Total Expense</th><th class="num">${money(groups.Expense)}</th></tr></table><p><b>Net ${net>=0?'Surplus':'Deficit'}: ${money(Math.abs(net))}</b></p>`;
 }
 function backup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='LJ_Accounts_Backup_'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(u)}
 function restore(inp){let f=inp.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.accounts||!x.entries)throw 0;if(confirm('Current data will be replaced by this backup. Continue?')){db=x;persist();renderAll();alert('Backup restored.')}}catch(e){alert('Invalid backup file.')}inp.value=''};r.readAsText(f)}
-function renderAll(){options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}voucherUI();renderHome();renderAccounts();renderLedger();renderReports()}
+function renderAll(){options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}voucherUI();renderHome();renderAccounts();renderLedger();initFY();renderReports()}
 date.value=new Date().toISOString().slice(0,10);renderAll();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 </script></body></html>
