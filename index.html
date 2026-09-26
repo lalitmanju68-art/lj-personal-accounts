@@ -28,7 +28,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.3 • Company → Financial Year • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.3.1 • Smart Financial Year • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -243,16 +243,23 @@ function familyMembers(c){
  let k=companyFamilyKey(c);
  return Object.values(multi.companies).filter(x=>x.id===k||x.parentCompanyId===k).sort((a,b)=>(a.from||'').localeCompare(b.from||''));
 }
+function closeFYPicker(){let x=document.getElementById('fyPicker');if(x)x.remove()}
+function openSelectedFY(id){
+ let x=multi.companies[id];if(!x)return;
+ saveMulti();multi.active=id;db=x.db;saveMulti();closeFYPicker();renderAll();show('home');
+}
 function switchCompany(id){
  let c=multi.companies[id];if(!c)return;
  let yrs=familyMembers(c);
- if(yrs.length===1){saveMulti();multi.active=yrs[0].id;db=yrs[0].db;saveMulti();renderAll();show('home');return}
- let menu=yrs.map((x,i)=>`${i+1}. ${periodText(x)}`).join('\n');
- let pick=prompt(`Select Financial Year\n\n${menu}\n\nEnter number:`);
- if(pick===null)return;
- let n=parseInt(pick,10);
- if(!n||n<1||n>yrs.length)return alert('Select a valid Financial Year number');
- saveMulti();multi.active=yrs[n-1].id;db=yrs[n-1].db;saveMulti();renderAll();show('home');
+ if(yrs.length===1){openSelectedFY(yrs[0].id);return}
+ closeFYPicker();
+ let ov=document.createElement('div');ov.id='fyPicker';
+ ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px';
+ ov.innerHTML=`<div class="card" style="width:min(460px,100%);max-height:80vh;overflow:auto;background:white">
+ <div style="display:flex;justify-content:space-between;align-items:center"><b>Select Financial Year</b><button onclick="closeFYPicker()">✕</button></div>
+ <div style="margin-top:12px">${yrs.map(x=>`<button style="width:100%;margin:6px 0;text-align:left;padding:14px" onclick="openSelectedFY('${x.id}')">${esc(periodText(x))}${x.id===multi.active?' • ACTIVE':''}</button>`).join('')}</div>
+ </div>`;
+ ov.onclick=e=>{if(e.target===ov)closeFYPicker()};document.body.appendChild(ov);
 }
 function editCompany(id){
  let c=multi.companies[id];if(!c)return;
@@ -302,6 +309,15 @@ function renderActiveCompany(){
 function cloneOpeningAccount(a,newId,opening){
  return {id:newId,name:a.name,group:a.group,subgroup:a.subgroup||null,opening:Math.abs(opening),otype:opening>=0?'Dr':'Cr'}
 }
+function suggestNextFY(){
+ if(!window.newFYFrom||!window.newFYTo)return;
+ let yrs=familyMembers(activeCompany()).filter(x=>x.to).sort((a,b)=>a.to.localeCompare(b.to));
+ let last=yrs[yrs.length-1];if(!last)return;
+ let end=new Date(last.to+'T00:00:00');end.setDate(end.getDate()+1);
+ let y=end.getFullYear();
+ newFYFrom.value=`${y}-04-01`;
+ newFYTo.value=`${y+1}-03-31`;
+}
 function createNewFY(){
  let source=activeCompany(),from=newFYFrom.value,to=newFYTo.value;
  if(!from||!to)return alert('Enter From Date and To Date');
@@ -320,7 +336,7 @@ function createNewFY(){
  multi.companies[id]={id,name:source.name,from,to,parentCompanyId:companyFamilyKey(source),db:newdb};
  multi.active=id;db=newdb;saveMulti();newFYFrom.value='';newFYTo.value='';renderAll();show('home');
 }
-function renderAll(){renderCompanies();renderActiveCompany();initReportPeriod();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
+function renderAll(){renderCompanies();renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
 date.value=new Date().toISOString().slice(0,10);renderAll();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
