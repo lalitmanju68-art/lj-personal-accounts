@@ -110,9 +110,20 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
  }
 }
 </style>
+
+<style>
+.report-company-name{font-size:24px;font-weight:800;margin:4px 0}
+.report-title{font-size:20px;font-weight:700;margin-top:6px}
+.report-period{font-size:16px;color:#666;margin-top:4px}
+@media print{
+ .report-company-name{font-size:20pt!important;text-align:center!important;color:#000!important}
+ .report-title{font-size:16pt!important;text-align:center!important;color:#000!important}
+ .report-period{font-size:11pt!important;text-align:center!important;color:#000!important;margin-bottom:12px!important}
+}
+</style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.9.1 • Ledger Print Fix • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.9.2 • Report & Sub Group Fix • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -624,7 +635,7 @@ function printCurrentReport(){document.body.classList.add('printing-report');win
 function printLedger(){document.body.classList.add('printing-ledger');window.print();setTimeout(()=>document.body.classList.remove('printing-ledger'),500)}
 function reportPeriodHeader(title){
  let c=activeCompany();
- return `<div class="card report-head"><div class="report-actions"><button onclick="backToReports()">← Back to Reports</button><button onclick="printCurrentReport()">Print / Save PDF</button></div><b style="font-size:20px">${title}</b><div class="muted" style="margin-top:5px">${esc(c.name)} • ${esc(periodText(c))}</div></div>`;
+ return `<div class="card report-head"><div class="report-actions"><button onclick="backToReports()">← Back to Reports</button><button onclick="printCurrentReport()">Print / Save PDF</button></div><div class="report-company-name">${esc(c.name)}</div><div class="report-title">${title}</div><div class="report-period">${esc(periodText(c))}</div></div>`;
 }
 function backToReports(){
  let menu=document.getElementById('reportMenuCard'),out=document.getElementById('reportOutput');
@@ -792,7 +803,7 @@ function upgradeAccountGroupUI(){
    g.dispatchEvent(new Event('change'));
  };
 }
-function renderAll(){renderBackupInfo();renderCompanies();setTimeout(()=>{upgradeAccountGroupUI();subGroupOnlyUI();fillAllAccountSubGroups();hideAccountMainGroup();},0);renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();setTimeout(paintDashboard,0);renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
+function renderAll(){renderBackupInfo();renderCompanies();setTimeout(()=>{upgradeAccountGroupUI();subGroupOnlyUI();fillAllAccountSubGroups();hideAccountMainGroup();},0);renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();fillAllAccountSubGroups();hideAccountMainGroup();renderSubGroups();voucherUI();renderHome();setTimeout(paintDashboard,0);renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
 date.value=new Date().toISOString().slice(0,10);renderAll();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
