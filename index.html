@@ -72,7 +72,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.5.1 • Colourful Dashboard • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.5.2 • Colourful Dashboard • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -442,7 +442,37 @@ function createNewFY(){
  multi.companies[id]={id,name:source.name,from,to,parentCompanyId:companyFamilyKey(source),db:newdb};
  multi.active=id;db=newdb;saveMulti();newFYFrom.value='';newFYTo.value='';renderAll();show('home');
 }
-function renderAll(){renderCompanies();renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
+
+function paintDashboard(){
+ const labels={
+  'Cash Balance':['linear-gradient(135deg,#dff7e7,#f7fff9)','#137a3d','#a9dfba'],
+  'Total Bank Balance':['linear-gradient(135deg,#dceeff,#f7fbff)','#1261a0','#a9cfee'],
+  'This Month Income':['linear-gradient(135deg,#d9f7ef,#f6fffc)','#087f5b','#a7e3d3'],
+  'This Month Expense':['linear-gradient(135deg,#ffe6c9,#fff9f2)','#b45309','#efc28f']
+ };
+ document.querySelectorAll('#home .card').forEach(card=>{
+   const txt=(card.innerText||'').trim();
+   for(const [label,v] of Object.entries(labels)){
+     if(txt.startsWith(label)){
+       card.style.background=v[0];
+       card.style.border='2px solid '+v[2];
+       card.style.borderRadius='16px';
+       card.style.boxShadow='0 5px 14px rgba(0,0,0,.10)';
+       const first=card.querySelector('.muted');
+       if(first){first.style.color=v[1];first.style.fontWeight='800';}
+       const amount=card.querySelector('b,strong,.big');
+       if(amount){amount.style.color=v[1];amount.style.fontSize='25px';}
+     }
+   }
+   if(txt.includes('Net Deficit')||txt.includes('Net Surplus')){
+     card.style.background='linear-gradient(135deg,#f2e3ff,#fff7fd)';
+     card.style.border='2px solid #d5b4ed';
+     card.style.borderRadius='16px';
+     card.style.boxShadow='0 5px 14px rgba(0,0,0,.10)';
+   }
+ });
+}
+function renderAll(){renderCompanies();renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();setTimeout(paintDashboard,0);renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
 date.value=new Date().toISOString().slice(0,10);renderAll();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
