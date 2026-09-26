@@ -94,9 +94,25 @@ body.printing-ledger main>section{display:none!important} body.printing-ledger #
 body.printing-ledger .ledger-print-action,body.printing-ledger #ledger button{display:none!important}
 body.printing-ledger .card{box-shadow:none!important;border:0!important}
 }
-</style></head>
+</style>
+<style>
+@media print{
+ body.printing-ledger #ledger .ledger-report-head{display:block!important;margin-bottom:12px!important}
+ body.printing-ledger #ledger label,
+ body.printing-ledger #ledger input,
+ body.printing-ledger #ledger select,
+ body.printing-ledger #ledger #ledgerMatches{display:none!important}
+ body.printing-ledger #ledger th:last-child,
+ body.printing-ledger #ledger td:last-child{display:none!important}
+ body.printing-ledger #ledgerOut:before{
+   content:"Ledger Statement";
+   display:block;font-size:18pt;font-weight:700;margin:8px 0 12px
+ }
+}
+</style>
+</head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.9 • Print & PDF Reports • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.9.1 • Ledger Print Fix • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -161,7 +177,11 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 </section>
 
 <section id="ledger" class="hidden">
-<div class="card"><b>Ledger</b><label>Search Account</label>
+<div class="card"><div class="ledger-report-head">
+<b style="font-size:22px">Ledger</b>
+<div id="ledgerCompanyPeriod" class="muted" style="margin-top:5px"></div>
+<div class="actions ledger-print-action" style="margin:12px 0"><button onclick="printLedger()">Print / Save PDF</button></div>
+</div><label>Search Account</label>
 <input id="ledgerSearch" autocomplete="off" placeholder="Type e.g. HDFC, Lalit, Petrol" oninput="showLedgerMatches()">
 <div id="ledgerMatches"></div>
 <select id="ledgerAcc" class="hidden" onchange="renderLedger()"></select>
@@ -266,7 +286,10 @@ function renderLedgerSuggestions(){}
 function showLedgerMatches(){let inp=document.getElementById('ledgerSearch'),out=document.getElementById('ledgerMatches'),sel=document.getElementById('ledgerAcc');if(!inp||!out||!sel)return;let q=inp.value.trim().toLowerCase();if(!q){out.innerHTML='';sel.value='';ledgerOut.innerHTML='';return}let list=db.accounts.filter(a=>a.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,12);out.innerHTML=list.length?`<div class="card" style="padding:6px;margin-top:6px">${list.map(a=>`<button style="display:block;width:100%;text-align:left;margin:3px 0" onclick="selectLedgerAccount(${a.id})">${esc(a.name)}</button>`).join('')}</div>`:'<p class="muted">No matching account.</p>'}
 function selectLedgerAccount(id){let a=acc(id);if(!a)return;ledgerSearch.value=a.name;ledgerAcc.value=a.id;ledgerMatches.innerHTML='';renderLedger()}
 function ledgerPick(){showLedgerMatches()}
-function renderLedger(){let id=+ledgerAcc.value,a=acc(id);if(!a){ledgerOut.innerHTML='';return}let from=window.ledgerFrom?ledgerFrom.value:'',to=window.ledgerTo?ledgerTo.value:'';let all=db.entries.filter(e=>e.dr==id||e.cr==id).sort((x,y)=>x.date.localeCompare(y.date)||x.id-y.id),running=(a.otype==='Dr'?a.opening:-a.opening);if(from){for(let e of all.filter(e=>e.date<from))running+=(e.dr==id?e.amount:-e.amount)}let rows=all.filter(e=>(!from||e.date>=from)&&(!to||e.date<=to));let html=`<p class="muted">${from?idate(from):'Beginning'} to ${to?idate(to):'Today'} • Opening: ${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</p><table><tr><th>Date / Particular</th><th class="num">Dr</th><th class="num">Cr</th><th class="num">Balance</th><th>Action</th></tr>`;for(let e of rows){let isdr=e.dr==id;running+=isdr?e.amount:-e.amount;html+=`<tr><td>${idate(e.date)}<br>${esc(acc(isdr?e.cr:e.dr)?.name||'')}<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${isdr?money(e.amount):''}</td><td class="num">${!isdr?money(e.amount):''}</td><td class="num">${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</td><td><button onclick="editEntry(${e.id})">Edit</button> <button class="danger" onclick="deleteEntry(${e.id})">Delete</button></td></tr>`}ledgerOut.innerHTML=html+'</table>'}
+function renderLedger(){
+let c=activeCompany(),lh=document.getElementById('ledgerCompanyPeriod');
+if(lh)lh.innerHTML=`<b>${esc(c.name)}</b> • ${esc(periodText(c))}`;
+let id=+ledgerAcc.value,a=acc(id);if(!a){ledgerOut.innerHTML='';return}let from=window.ledgerFrom?ledgerFrom.value:'',to=window.ledgerTo?ledgerTo.value:'';let all=db.entries.filter(e=>e.dr==id||e.cr==id).sort((x,y)=>x.date.localeCompare(y.date)||x.id-y.id),running=(a.otype==='Dr'?a.opening:-a.opening);if(from){for(let e of all.filter(e=>e.date<from))running+=(e.dr==id?e.amount:-e.amount)}let rows=all.filter(e=>(!from||e.date>=from)&&(!to||e.date<=to));let html=`<p class="muted">${from?idate(from):'Beginning'} to ${to?idate(to):'Today'} • Opening: ${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</p><table><tr><th>Date / Particular</th><th class="num">Dr</th><th class="num">Cr</th><th class="num">Balance</th><th>Action</th></tr>`;for(let e of rows){let isdr=e.dr==id;running+=isdr?e.amount:-e.amount;html+=`<tr><td>${idate(e.date)}<br>${esc(acc(isdr?e.cr:e.dr)?.name||'')}<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${isdr?money(e.amount):''}</td><td class="num">${!isdr?money(e.amount):''}</td><td class="num">${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</td><td><button onclick="editEntry(${e.id})">Edit</button> <button class="danger" onclick="deleteEntry(${e.id})">Delete</button></td></tr>`}ledgerOut.innerHTML=html+'</table>'}
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function daysInMonth(y,m){return new Date(y,m,0).getDate()}
 function buildDateParts(id){
