@@ -123,7 +123,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.9.2 • Report & Sub Group Fix • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.9.3 • Sub Group Stable Fix • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -272,9 +272,12 @@ function idate(d){if(!d)return '';let p=String(d).split('-');return p.length===3
 function show(id){document.querySelectorAll('main>section').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');renderAll()}
 function options(sel,include=true){let s=document.getElementById(sel);let val=s.value;s.innerHTML=db.accounts.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val)s.value=val}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function saveAccount(){let name=aname.value.trim(),id=+accountEditId.value;if(!name)return alert('Enter account name');if(db.accounts.some(a=>a.name.toLowerCase()==name.toLowerCase()&&a.id!==id))return alert('Account already exists');let data={name,group:agroup.value,subgroup:+asubgroup.value||null,opening:+aopen.value||0,otype:aotype.value};if(id){let a=acc(id);if(!a)return alert('Account not found');Object.assign(a,data)}else db.accounts.push({id:db.nextA++,...data});persist();cancelAccountEdit(false);renderAll()}
-function editAccount(id){let a=acc(id);if(!a)return;show('accounts');aname.value=a.name;agroup.value=a.group;renderSubGroupOptions();asubgroup.value=a.subgroup||'';aopen.value=a.opening||0;aotype.value=a.otype||'Dr';accountEditId.value=a.id;accountSaveBtn.textContent='UPDATE ACCOUNT';accountCancelBtn.classList.remove('hidden');aname.focus()}
-function cancelAccountEdit(doRender=true){aname.value='';agroup.value='Cash';renderSubGroupOptions();asubgroup.value='';aopen.value=0;aotype.value='Dr';accountEditId.value='';accountSaveBtn.textContent='ADD ACCOUNT';accountCancelBtn.classList.add('hidden');if(doRender)renderAll()}
+function saveAccount(){
+let chosen=(db.subgroups||[]).find(x=>String(x.id)===String(asubgroup.value));
+if(chosen){let mg=chosen.group||chosen.mainGroup;if(mg)agroup.value=mg}
+let name=aname.value.trim(),id=+accountEditId.value;if(!name)return alert('Enter account name');if(db.accounts.some(a=>a.name.toLowerCase()==name.toLowerCase()&&a.id!==id))return alert('Account already exists');let data={name,group:agroup.value,subgroup:+asubgroup.value||null,opening:+aopen.value||0,otype:aotype.value};if(id){let a=acc(id);if(!a)return alert('Account not found');Object.assign(a,data)}else db.accounts.push({id:db.nextA++,...data});persist();cancelAccountEdit(false);renderAll()}
+function editAccount(id){let a=acc(id);if(!a)return;show('accounts');aname.value=a.name;agroup.value=a.group;fillAllAccountSubGroups();asubgroup.value=a.subgroup||'';aopen.value=a.opening||0;aotype.value=a.otype||'Dr';accountEditId.value=a.id;accountSaveBtn.textContent='UPDATE ACCOUNT';accountCancelBtn.classList.remove('hidden');aname.focus()}
+function cancelAccountEdit(doRender=true){aname.value='';agroup.value='Cash';fillAllAccountSubGroups();asubgroup.value='';aopen.value=0;aotype.value='Dr';accountEditId.value='';accountSaveBtn.textContent='ADD ACCOUNT';accountCancelBtn.classList.add('hidden');if(doRender)renderAll()}
 function deleteAccount(id){let a=acc(id);if(!a)return;if(id===1||id===2)return alert('System account cannot be deleted');if(db.entries.some(e=>e.dr===id||e.cr===id))return alert('This account has transactions and cannot be deleted');if(!confirm('Delete '+a.name+'?'))return;db.accounts=db.accounts.filter(x=>x.id!==id);persist();if(+accountEditId.value===id)cancelAccountEdit(false);renderAll()}
 function sg(id){return db.subgroups.find(x=>x.id==id)}
 function renderSubGroupOptions(){let sel=document.getElementById('asubgroup');if(!sel)return;let val=sel.value,g=agroup.value;let list=db.subgroups.filter(x=>x.group===g).sort((a,b)=>a.name.localeCompare(b.name));sel.innerHTML='<option value="">General / None</option>'+list.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');if(list.some(x=>String(x.id)===String(val)))sel.value=val}
@@ -803,7 +806,7 @@ function upgradeAccountGroupUI(){
    g.dispatchEvent(new Event('change'));
  };
 }
-function renderAll(){renderBackupInfo();renderCompanies();setTimeout(()=>{upgradeAccountGroupUI();subGroupOnlyUI();fillAllAccountSubGroups();hideAccountMainGroup();},0);renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();fillAllAccountSubGroups();hideAccountMainGroup();renderSubGroups();voucherUI();renderHome();setTimeout(paintDashboard,0);renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
+function renderAll(){renderBackupInfo();renderCompanies();setTimeout(()=>{fillAllAccountSubGroups();hideAccountMainGroup();},0);renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();fillAllAccountSubGroups();hideAccountMainGroup();renderSubGroups();voucherUI();renderHome();setTimeout(paintDashboard,0);renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
 date.value=new Date().toISOString().slice(0,10);renderAll();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
@@ -816,8 +819,6 @@ save=function(){
 };
 
 document.addEventListener('DOMContentLoaded',()=>{
- setTimeout(()=>{subGroupOnlyUI();fillAllAccountSubGroups();hideAccountMainGroup();},50);
- const target=document.getElementById('accounts');
- if(target)new MutationObserver(()=>setTimeout(()=>{subGroupOnlyUI();fillAllAccountSubGroups();hideAccountMainGroup();},0)).observe(target,{childList:true,subtree:true});
+ setTimeout(()=>{fillAllAccountSubGroups();hideAccountMainGroup();},50);
 });
 </script></body></html>
