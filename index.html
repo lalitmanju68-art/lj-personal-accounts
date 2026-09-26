@@ -72,7 +72,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.6 • Full Backup & Restore • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.7 • Reports Menu • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -146,6 +146,20 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </section>
 
 <section id="reports" class="hidden">
+<h2>Reports</h2>
+<div class="card">
+ <b>Select Report</b>
+ <div class="actions" style="display:grid;gap:9px;margin-top:12px">
+  <button onclick="selectReport('daybook')">Day Book</button>
+  <button onclick="show('ledger')">Ledger</button>
+  <button onclick="selectReport('trial')">Trial Balance</button>
+  <button onclick="selectReport('summary')">Income & Expense Summary</button>
+  <button onclick="selectReport('pl')">Profit & Loss Account</button>
+  <button onclick="selectReport('bs')">Balance Sheet</button>
+ </div>
+</div>
+<div id="reportOutput"></div>
+<div id="legacyReports" style="display:none">
 <div class="card"><b>Financial Year / Report Period</b>
 <label>Active Financial Year</label><div id="reportActiveFY" style="font-weight:700;margin:6px 0 12px"></div>
 <div class="grid">
@@ -165,7 +179,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 <div class="card"><b>Backup / Restore</b><p class="muted">Keep a backup file outside the browser. Clearing browser data can erase local records.</p>
 <div class="actions"><button onclick="backup()">Export Backup</button><label class="btn">Restore Backup<input class="hidden" type="file" id="restoreFile" accept=".json,application/json" onchange="restore(this)"></label></div>
 </div>
-</section>
+</div></section>
 </main></div>
 
 <section id="backup" class="page">
@@ -545,6 +559,57 @@ function renderBackupInfo(){
  if(!window.backupInfo)return;
  let cs=logicalCompanies(),fys=Object.values(multi.companies),entries=fys.reduce((z,c)=>z+((c.db&&c.db.entries)||[]).length,0);
  backupInfo.textContent=`Companies: ${cs.length} • Financial Years: ${fys.length} • Entries: ${entries}`;
+}
+
+function reportPeriodHeader(title){
+ let c=activeCompany();
+ return `<div class="card"><b style="font-size:20px">${title}</b><div class="muted" style="margin-top:5px">${esc(c.name)} • ${esc(periodText(c))}</div></div>`;
+}
+function selectReport(kind){
+ renderReports();
+ let out=document.getElementById('reportOutput'),legacy=document.getElementById('legacyReports');
+ if(!out||!legacy)return;
+ let map={daybook:'Day Book',trial:'Trial Balance',summary:'Income & Expense Summary'};
+ if(map[kind]){
+   let cards=Array.from(legacy.querySelectorAll('.card'));
+   let card=cards.find(x=>(x.innerText||'').trim().startsWith(map[kind]));
+   out.innerHTML=reportPeriodHeader(map[kind])+(card?card.outerHTML:'<div class="card">Report not available.</div>');
+   return;
+ }
+ if(kind==='pl'){out.innerHTML=reportPeriodHeader('Profit & Loss Account')+profitLossHTML();return}
+ if(kind==='bs'){out.innerHTML=reportPeriodHeader('Balance Sheet')+balanceSheetHTML();return}
+}
+function reportEntries(){
+ let f=window.repFrom&&repFrom.value?repFrom.value:activeCompany().from;
+ let t=window.repTo&&repTo.value?repTo.value:activeCompany().to;
+ return db.entries.filter(e=>(!f||e.date>=f)&&(!t||e.date<=t));
+}
+function profitLossHTML(){
+ let es=reportEntries(),income=0,expense=0;
+ for(let a of db.accounts){
+   if(a.group!=='Income'&&a.group!=='Expense')continue;
+   let dr=es.filter(e=>e.dr==a.id).reduce((z,e)=>z+e.amount,0);
+   let cr=es.filter(e=>e.cr==a.id).reduce((z,e)=>z+e.amount,0);
+   if(a.group==='Income')income+=cr-dr; else expense+=dr-cr;
+ }
+ let net=income-expense;
+ return `<div class="card"><table><tr><th>Particulars</th><th class="num">Amount</th></tr>
+ <tr><td>Total Income</td><td class="num">${money(income)}</td></tr>
+ <tr><td>Total Expense</td><td class="num">${money(expense)}</td></tr>
+ <tr><th>${net>=0?'Net Profit':'Net Loss'}</th><th class="num">${money(Math.abs(net))}</th></tr></table></div>`;
+}
+function balanceSheetHTML(){
+ let assets=0,liabs=0;
+ for(let a of db.accounts){
+   if(a.group==='Income'||a.group==='Expense')continue;
+   let b=bal(a);
+   if(b>=0)assets+=b;else liabs+=-b;
+ }
+ return `<div class="card"><table><tr><th>Side</th><th class="num">Amount</th></tr>
+ <tr><td>Debit / Asset Balances</td><td class="num">${money(assets)}</td></tr>
+ <tr><td>Credit / Liability Balances</td><td class="num">${money(liabs)}</td></tr>
+ <tr><th>Difference</th><th class="num">${money(Math.abs(assets-liabs))}</th></tr></table>
+ <p class="muted">Detailed classified Balance Sheet will be refined after account-group mapping is finalized.</p></div>`;
 }
 function renderAll(){renderBackupInfo();renderCompanies();renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();setTimeout(paintDashboard,0);renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
 date.value=new Date().toISOString().slice(0,10);renderAll();
