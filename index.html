@@ -202,7 +202,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <div id="loginMsg" class="muted"></div>
 </div></div>
 <div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.1 • Company Details + Login • Data Safe</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.1.2 • Party Details + Quick Add • Data Safe</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -241,7 +241,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <div class="card"><b>New Transaction</b>
 <label>Date</label><input type="date" id="date">
 <label>Voucher Type</label><select id="vtype" onchange="voucherUI()"><option value="Payment">Payment</option><option value="Receipt">Receipt</option><option value="Contra">Contra</option><option value="Journal">Journal</option></select>
-<div id="normalAccounts" class="row"><div><label id="drLabel">Debit Account</label><select id="dr"></select></div><div><label id="crLabel">Credit Account</label><select id="cr"></select></div></div>
+<div id="normalAccounts" class="row"><div><label id="drLabel">Debit Account</label><select id="dr"></select></div><div><label id="crLabel">Credit Account</label><select id="cr"></select></div></div><div id="quickAddAccountWrap" class="actions"><button type="button" onclick="quickAddAccount()">+ ADD ACCOUNT</button></div>
 <div id="contraBox" class="hidden"><label>Contra Direction</label><select id="contraDir" onchange="contraUI()"><option value="bankToCash">Bank → Cash</option><option value="cashToBank">Cash → Bank</option><option value="bankToBank">Bank → Bank</option></select><label id="bank1Label">Bank Account</label><select id="contraBank"></select><div id="bank2Wrap" class="hidden"><label>To Bank</label><select id="contraBank2"></select></div></div>
 <label>Amount</label><input id="amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">
 <label>Narration</label><textarea id="narr" rows="2" placeholder="Optional details"></textarea>
@@ -252,8 +252,13 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <section id="accounts" class="hidden">
 <div class="card"><b>Add Account</b>
 <label>Account Name</label><input id="aname" placeholder="e.g. HDFC Bank">
-<label>Group</label><select id="agroup" onchange="renderSubGroupOptions()"><option>Cash</option><option>Bank</option><option>Party / Person</option><option>Income</option><option>Expense</option><option>Asset</option><option>Liability</option><option>Capital</option></select>
+<label>Group</label><select id="agroup" onchange="renderSubGroupOptions();togglePartyDetails()"><option>Cash</option><option>Bank</option><option>Party / Person</option><option>Income</option><option>Expense</option><option>Asset</option><option>Liability</option><option>Capital</option></select>
 <label>Sub Group</label><select id="asubgroup"><option value="">General / None</option></select>
+<div id="partyDetails" class="hidden">
+<label>Address <span class="muted">(Optional)</span></label><textarea id="partyAddress" rows="2"></textarea>
+<div class="grid"><div><label>City <span class="muted">(Optional)</span></label><input id="partyCity"></div><div><label>Mobile <span class="muted">(Optional)</span></label><input id="partyMobile" inputmode="numeric" maxlength="10" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)"></div></div>
+<label>PAN No. <span class="muted">(Optional)</span></label><input id="partyPan" maxlength="10" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,10)">
+</div>
 <div class="row"><div><label>Opening Balance</label><input id="aopen" type="number" step="0.01" value="0"></div><div><label>Opening Type</label><select id="aotype"><option>Dr</option><option>Cr</option></select></div></div>
 <input type="hidden" id="accountEditId"><div class="actions"><button class="primary" id="accountSaveBtn" onclick="saveAccount()">ADD ACCOUNT</button><button id="accountCancelBtn" class="hidden" onclick="cancelAccountEdit()">Cancel</button></div>
 </div>
@@ -382,9 +387,37 @@ function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;',
 function saveAccount(){
 let chosen=(db.subgroups||[]).find(x=>String(x.id)===String(asubgroup.value));
 if(chosen){let mg=chosen.group||chosen.mainGroup;if(mg)agroup.value=mg}
-let name=aname.value.trim(),id=+accountEditId.value;if(!name)return alert('Enter account name');if(db.accounts.some(a=>a.name.toLowerCase()==name.toLowerCase()&&a.id!==id))return alert('Account already exists');let data={name,group:agroup.value,subgroup:+asubgroup.value||null,opening:+aopen.value||0,otype:aotype.value};if(id){let a=acc(id);if(!a)return alert('Account not found');Object.assign(a,data)}else db.accounts.push({id:db.nextA++,...data});persist();cancelAccountEdit(false);renderAll()}
-function editAccount(id){let a=acc(id);if(!a)return;show('accounts');aname.value=a.name;agroup.value=a.group;fillAllAccountSubGroups();asubgroup.value=a.subgroup||'';aopen.value=a.opening||0;aotype.value=a.otype||'Dr';accountEditId.value=a.id;accountSaveBtn.textContent='UPDATE ACCOUNT';accountCancelBtn.classList.remove('hidden');aname.focus()}
-function cancelAccountEdit(doRender=true){aname.value='';agroup.value='Cash';fillAllAccountSubGroups();asubgroup.value='';aopen.value=0;aotype.value='Dr';accountEditId.value='';accountSaveBtn.textContent='ADD ACCOUNT';accountCancelBtn.classList.add('hidden');if(doRender)renderAll()}
+let name=aname.value.trim(),id=+accountEditId.value;if(!name)return alert('Enter account name');
+if(db.accounts.some(a=>a.name.toLowerCase()==name.toLowerCase()&&a.id!==id))return alert('Account already exists');
+let pan=(window.partyPan?.value||'').trim().toUpperCase(),mobile=(window.partyMobile?.value||'').trim();
+if(agroup.value==='Party / Person'||agroup.value==='Person'){
+ if(mobile&&!/^\d{10}$/.test(mobile))return alert('Mobile No. must be exactly 10 digits');
+ if(pan&&!/^[A-Z0-9]{10}$/.test(pan))return alert('PAN No. must be exactly 10 characters in CAPITAL letters');
+}
+let data={name,group:agroup.value,subgroup:+asubgroup.value||null,opening:+aopen.value||0,otype:aotype.value};
+if(agroup.value==='Party / Person'||agroup.value==='Person'){
+ data.address=(window.partyAddress?.value||'').trim();data.city=(window.partyCity?.value||'').trim();data.mobile=mobile;data.pan=pan;
+}else{data.address='';data.city='';data.mobile='';data.pan=''}
+let newId=id;
+if(id){let a=acc(id);if(!a)return alert('Account not found');Object.assign(a,data)}
+else{newId=db.nextA++;db.accounts.push({id:newId,...data})}
+persist();
+let returnToEntry=sessionStorage.getItem('ljpa_quick_add_account')==='1';
+cancelAccountEdit(false);renderAll();
+if(returnToEntry){sessionStorage.removeItem('ljpa_quick_add_account');show('entry');voucherUI();let a=acc(newId);if(a){let t=vtype.value;if(t==='Payment'&&a.group!=='Cash'&&a.group!=='Bank')dr.value=a.id;else if(t==='Receipt'&&a.group!=='Cash'&&a.group!=='Bank')cr.value=a.id;else if(t==='Journal'){dr.value=a.id}}}
+}
+function editAccount(id){let a=acc(id);if(!a)return;show('accounts');aname.value=a.name;agroup.value=a.group;fillAllAccountSubGroups();asubgroup.value=a.subgroup||'';aopen.value=a.opening||0;aotype.value=a.otype||'Dr';if(window.partyAddress)partyAddress.value=a.address||'';if(window.partyCity)partyCity.value=a.city||'';if(window.partyMobile)partyMobile.value=a.mobile||'';if(window.partyPan)partyPan.value=(a.pan||'').toUpperCase();togglePartyDetails();accountEditId.value=a.id;accountSaveBtn.textContent='UPDATE ACCOUNT';accountCancelBtn.classList.remove('hidden');aname.focus()}
+function cancelAccountEdit(doRender=true){aname.value='';agroup.value='Cash';fillAllAccountSubGroups();asubgroup.value='';aopen.value=0;aotype.value='Dr';if(window.partyAddress)partyAddress.value='';if(window.partyCity)partyCity.value='';if(window.partyMobile)partyMobile.value='';if(window.partyPan)partyPan.value='';togglePartyDetails();accountEditId.value='';accountSaveBtn.textContent='ADD ACCOUNT';accountCancelBtn.classList.add('hidden');if(doRender)renderAll()}
+function togglePartyDetails(){
+ let box=document.getElementById('partyDetails');if(!box)return;
+ let isParty=agroup.value==='Party / Person'||agroup.value==='Person';
+ box.classList.toggle('hidden',!isParty);
+}
+function quickAddAccount(){
+ sessionStorage.setItem('ljpa_quick_add_account','1');
+ show('accounts');cancelAccountEdit(false);
+ aname.value='';aname.focus();
+}
 function deleteAccount(id){let a=acc(id);if(!a)return;if(id===1||id===2)return alert('System account cannot be deleted');if(db.entries.some(e=>e.dr===id||e.cr===id))return alert('This account has transactions and cannot be deleted');if(!confirm('Delete '+a.name+'?'))return;db.accounts=db.accounts.filter(x=>x.id!==id);persist();if(+accountEditId.value===id)cancelAccountEdit(false);renderAll()}
 function sg(id){return db.subgroups.find(x=>x.id==id)}
 function renderSubGroupOptions(){let sel=document.getElementById('asubgroup');if(!sel)return;let val=sel.value,g=agroup.value;let list=db.subgroups.filter(x=>x.group===g).sort((a,b)=>a.name.localeCompare(b.name));sel.innerHTML='<option value="">General / None</option>'+list.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');if(list.some(x=>String(x.id)===String(val)))sel.value=val}
@@ -546,8 +579,11 @@ function createCompany(){
  if(!name)return alert('Enter Company Name');
  if(!from||!to)return alert('Enter From Date and To Date');
  if(from>to)return alert('From Date cannot be after To Date');
+ let mob=(window.companyMobile?.value||'').trim(),pan=(window.companyPan?.value||'').trim().toUpperCase();
+ if(mob&&!/^\d{10}$/.test(mob))return alert('Mobile No. must be exactly 10 digits');
+ if(pan&&!/^[A-Z0-9]{10}$/.test(pan))return alert('PAN No. must be exactly 10 characters in CAPITAL letters');
  let id='c'+Date.now();
- multi.companies[id]={id,name,from,to,address:(window.companyAddress?.value||'').trim(),mobile:(window.companyMobile?.value||'').trim(),pan:(window.companyPan?.value||'').trim(),gst:(window.companyGst?.value||'').trim(),fssai:(window.companyFssai?.value||'').trim(),db:{accounts:[],entries:[],subgroups:[],nextA:1,nextE:1,nextSG:1}};
+ multi.companies[id]={id,name,from,to,address:(window.companyAddress?.value||'').trim(),mobile:mob,pan:pan,gst:(window.companyGst?.value||'').trim(),fssai:(window.companyFssai?.value||'').trim(),db:{accounts:[],entries:[],subgroups:[],nextA:1,nextE:1,nextSG:1}};
  multi.active=id;db=multi.companies[id].db;saveMulti();
  companyName.value='';companyFrom.value='';companyTo.value='';renderAll();show('companies');
 }
@@ -632,7 +668,7 @@ function companyAction(action){
    box.innerHTML=`<div class="card"><b>New Company</b>
 <label>Company Name</label><input id="companyName">
 <label>Address <span class="muted">(Optional)</span></label><textarea id="companyAddress" rows="2"></textarea>
-<div class="grid"><div><label>Mobile <span class="muted">(Optional)</span></label><input id="companyMobile"></div><div><label>PAN No. <span class="muted">(Optional)</span></label><input id="companyPan"></div></div>
+<div class="grid"><div><label>Mobile <span class="muted">(Optional)</span></label><input id="companyMobile" inputmode="numeric" maxlength="10" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)"></div><div><label>PAN No. <span class="muted">(Optional)</span></label><input id="companyPan" maxlength="10" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,10)"></div></div>
 <div class="grid"><div><label>GST No. <span class="muted">(Optional)</span></label><input id="companyGst"></div><div><label>FSSAI No. <span class="muted">(Optional)</span></label><input id="companyFssai"></div></div>
 <div class="grid"><div><label>From Date</label><input type="date" id="companyFrom"></div><div><label>To Date</label><input type="date" id="companyTo"></div></div>
 <div class="actions"><button class="primary" onclick="createCompany()">CREATE COMPANY</button></div></div>`;
@@ -665,7 +701,7 @@ function chooseCompanyAction(action,id){
    box.innerHTML=`<div class="card"><b>Edit Company Details</b>
    <label>Company Name</label><input id="editCompanyName" value="${esc(c.name)}">
    <label>Address <span class="muted">(Optional)</span></label><textarea id="editCompanyAddress" rows="2">${esc(c.address||'')}</textarea>
-   <div class="grid"><div><label>Mobile <span class="muted">(Optional)</span></label><input id="editCompanyMobile" value="${esc(c.mobile||'')}"></div><div><label>PAN No. <span class="muted">(Optional)</span></label><input id="editCompanyPan" value="${esc(c.pan||'')}"></div></div>
+   <div class="grid"><div><label>Mobile <span class="muted">(Optional)</span></label><input id="editCompanyMobile" inputmode="numeric" maxlength="10" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" value="${esc(c.mobile||'')}"></div><div><label>PAN No. <span class="muted">(Optional)</span></label><input id="editCompanyPan" maxlength="10" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,10)" value="${esc(c.pan||'')}"></div></div>
    <div class="grid"><div><label>GST No. <span class="muted">(Optional)</span></label><input id="editCompanyGst" value="${esc(c.gst||'')}"></div><div><label>FSSAI No. <span class="muted">(Optional)</span></label><input id="editCompanyFssai" value="${esc(c.fssai||'')}"></div></div>
    <div class="actions"><button class="primary" onclick="saveCompanyDetails('${id}')">SAVE COMPANY DETAILS</button></div></div>`;
    return;
@@ -682,7 +718,10 @@ function saveCompanyDetails(id){
  let c=multi.companies[id];if(!c)return;
  let name=(document.getElementById('editCompanyName')?.value||'').trim();
  if(!name)return alert('Enter Company Name');
- let data={name,address:(document.getElementById('editCompanyAddress')?.value||'').trim(),mobile:(document.getElementById('editCompanyMobile')?.value||'').trim(),pan:(document.getElementById('editCompanyPan')?.value||'').trim(),gst:(document.getElementById('editCompanyGst')?.value||'').trim(),fssai:(document.getElementById('editCompanyFssai')?.value||'').trim()};
+ let mob=(document.getElementById('editCompanyMobile')?.value||'').trim(),pan=(document.getElementById('editCompanyPan')?.value||'').trim().toUpperCase();
+ if(mob&&!/^\d{10}$/.test(mob))return alert('Mobile No. must be exactly 10 digits');
+ if(pan&&!/^[A-Z0-9]{10}$/.test(pan))return alert('PAN No. must be exactly 10 characters in CAPITAL letters');
+ let data={name,address:(document.getElementById('editCompanyAddress')?.value||'').trim(),mobile:mob,pan:pan,gst:(document.getElementById('editCompanyGst')?.value||'').trim(),fssai:(document.getElementById('editCompanyFssai')?.value||'').trim()};
  familyMembers(c).forEach(x=>Object.assign(x,data));
  saveMulti();renderAll();companyAction('edit');
 }
@@ -989,6 +1028,7 @@ function fillAllAccountSubGroups(){
      const mg=rec.group||rec.mainGroup;
      if(mg)g.value=mg;
    }
+   togglePartyDetails();
  };
  sg.dispatchEvent(new Event('change'));
  hideAccountMainGroup();
