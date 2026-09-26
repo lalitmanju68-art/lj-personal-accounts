@@ -24,7 +24,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V1 • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V1.1 • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -42,11 +42,12 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 <section id="entry" class="hidden">
 <div class="card"><b>New Transaction</b>
 <label>Date</label><input type="date" id="date">
-<label>Voucher Type</label><select id="vtype"><option>Cash</option><option>Bank</option><option>Journal</option><option>Contra</option></select>
-<div class="row"><div><label>Debit Account</label><select id="dr"></select></div><div><label>Credit Account</label><select id="cr"></select></div></div>
+<label>Voucher Type</label><select id="vtype" onchange="voucherUI()"><option>Cash</option><option>Bank</option><option>Journal</option><option>Contra</option></select>
+<div id="normalAccounts" class="row"><div><label>Debit Account</label><select id="dr"></select></div><div><label>Credit Account</label><select id="cr"></select></div></div>
+<div id="contraBox" class="hidden"><label>Contra Direction</label><select id="contraDir"><option value="bankToCash">Bank → Cash</option><option value="cashToBank">Cash → Bank</option></select><label>Bank Account</label><select id="contraBank"></select></div>
 <label>Amount</label><input id="amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">
 <label>Narration</label><textarea id="narr" rows="2" placeholder="Optional details"></textarea>
-<div class="actions"><button class="primary" onclick="saveEntry()">SAVE ENTRY</button><button onclick="resetEntry()">Clear</button></div>
+<input type="hidden" id="editId"><div class="actions"><button class="primary" id="saveBtn" onclick="saveEntry()">SAVE ENTRY</button><button onclick="resetEntry()">Clear</button></div>
 <div id="entryMsg" class="muted"></div>
 </div></section>
 
@@ -84,8 +85,11 @@ function show(id){document.querySelectorAll('main>section').forEach(x=>x.classLi
 function options(sel,include=true){let s=document.getElementById(sel);let val=s.value;s.innerHTML=db.accounts.map(a=>`<option value="${a.id}">${esc(a.name)} — ${a.group}</option>`).join('');if(val)s.value=val}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function addAccount(){let name=aname.value.trim();if(!name)return alert('Enter account name');if(db.accounts.some(a=>a.name.toLowerCase()==name.toLowerCase()))return alert('Account already exists');db.accounts.push({id:db.nextA++,name,group:agroup.value,opening:+aopen.value||0,otype:aotype.value});persist();aname.value='';aopen.value=0;renderAll()}
-function saveEntry(){let d=+dr.value,c=+cr.value,a=+amount.value;if(!date.value||!d||!c||!(a>0))return alert('Date, Debit, Credit and Amount are required');if(d===c)return alert('Debit and Credit account cannot be same');db.entries.push({id:db.nextE++,date:date.value,type:vtype.value,dr:d,cr:c,amount:a,narr:narr.value.trim(),created:new Date().toISOString()});persist();entryMsg.textContent='Entry saved successfully.';resetEntry(false);renderAll()}
-function resetEntry(clearMsg=true){amount.value='';narr.value='';if(clearMsg)entryMsg.textContent=''}
+function voucherUI(){let is=vtype.value==='Contra';normalAccounts.classList.toggle('hidden',is);contraBox.classList.toggle('hidden',!is)}
+function saveEntry(){let d,c,a=+amount.value;if(vtype.value==='Contra'){let cash=db.accounts.find(x=>x.group==='Cash'),bank=acc(+contraBank.value);if(!cash||!bank)return alert('Cash and Bank account are required');if(contraDir.value==='bankToCash'){d=cash.id;c=bank.id}else{d=bank.id;c=cash.id}}else{d=+dr.value;c=+cr.value}if(!date.value||!d||!c||!(a>0))return alert('Date, accounts and Amount are required');if(d===c)return alert('Debit and Credit account cannot be same');let id=+editId.value;let item={id:id||db.nextE++,date:date.value,type:vtype.value,dr:d,cr:c,amount:a,narr:narr.value.trim(),created:new Date().toISOString()};if(id){let i=db.entries.findIndex(e=>e.id==id);if(i>=0)db.entries[i]=item}else db.entries.push(item);persist();entryMsg.textContent=id?'Entry updated successfully.':'Entry saved successfully.';resetEntry(false);renderAll()}
+function resetEntry(clearMsg=true){amount.value='';narr.value='';editId.value='';saveBtn.textContent='SAVE ENTRY';if(clearMsg)entryMsg.textContent='';voucherUI()}
+function editEntry(id){let e=db.entries.find(x=>x.id==id);if(!e)return;show('entry');date.value=e.date;vtype.value=e.type;amount.value=e.amount;narr.value=e.narr||'';editId.value=e.id;saveBtn.textContent='UPDATE ENTRY';if(e.type==='Contra'){if(acc(e.dr)?.group==='Cash'){contraDir.value='bankToCash';contraBank.value=e.cr}else{contraDir.value='cashToBank';contraBank.value=e.dr}}else{dr.value=e.dr;cr.value=e.cr}voucherUI()}
+function deleteEntry(id){if(!confirm('Delete this entry?'))return;db.entries=db.entries.filter(e=>e.id!=id);persist();renderAll()}
 function acc(id){return db.accounts.find(a=>a.id==id)}
 function bal(a){let b=(a.otype==='Dr'?a.opening:-a.opening);for(let e of db.entries){if(e.dr==a.id)b+=e.amount;if(e.cr==a.id)b-=e.amount}return b}
 function renderHome(){let cash=db.accounts.filter(a=>a.group==='Cash').reduce((s,a)=>s+bal(a),0), bank=db.accounts.filter(a=>a.group==='Bank').reduce((s,a)=>s+bal(a),0),sum=db.entries.reduce((s,e)=>s+e.amount,0);cashBal.textContent=money(cash);bankBal.textContent=money(bank);totalDr.textContent=money(sum);totalCr.textContent=money(sum);let es=[...db.entries].sort((a,b)=>b.id-a.id).slice(0,5);recent.innerHTML=es.length?`<table>${es.map(e=>`<tr><td>${e.date}<br><span class="pill">${e.type}</span></td><td>${esc(acc(e.dr)?.name||'')} → ${esc(acc(e.cr)?.name||'')}<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${money(e.amount)}</td></tr>`).join('')}</table>`:'<p class="muted">No entries yet.</p>'}
@@ -94,7 +98,7 @@ function renderLedger(){let id=+ledgerAcc.value,a=acc(id);if(!a){ledgerOut.inner
 function renderReports(){let es=[...db.entries].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);daybook.innerHTML=es.length?`<table><tr><th>Date</th><th>Entry</th><th class="num">Amount</th></tr>${es.map(e=>`<tr><td>${e.date}</td><td>${esc(acc(e.dr)?.name)} Dr<br>${esc(acc(e.cr)?.name)} Cr<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${money(e.amount)}</td></tr>`).join('')}</table>`:'<p class="muted">No entries.</p>';let td=0,tc=0;let rows=db.accounts.map(a=>{let b=bal(a);if(b>=0)td+=b;else tc+=-b;return `<tr><td>${esc(a.name)}</td><td class="num">${b>=0?money(b):''}</td><td class="num">${b<0?money(-b):''}</td></tr>`}).join('');trial.innerHTML=`<table><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr>${rows}<tr><th>Total</th><th class="num">${money(td)}</th><th class="num">${money(tc)}</th></tr></table>`}
 function backup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='LJ_Accounts_Backup_'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(u)}
 function restore(inp){let f=inp.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.accounts||!x.entries)throw 0;if(confirm('Current data will be replaced by this backup. Continue?')){db=x;persist();renderAll();alert('Backup restored.')}}catch(e){alert('Invalid backup file.')}inp.value=''};r.readAsText(f)}
-function renderAll(){options('dr');options('cr');options('ledgerAcc');renderHome();renderAccounts();renderLedger();renderReports()}
+function renderAll(){options('dr');options('cr');options('ledgerAcc');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=db.accounts.filter(a=>a.group==='Bank').map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val)cb.value=val}voucherUI();renderHome();renderAccounts();renderLedger();renderReports()}
 date.value=new Date().toISOString().slice(0,10);renderAll();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 </script></body></html>
