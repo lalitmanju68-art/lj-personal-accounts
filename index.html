@@ -28,7 +28,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.2.1 • Date Select Fix • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.3 • Company → Financial Year • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -238,17 +238,27 @@ function createCompany(){
  multi.active=id;db=multi.companies[id].db;saveMulti();
  companyName.value='';companyFrom.value='';companyTo.value='';renderAll();show('companies');
 }
+function companyFamilyKey(c){return c.parentCompanyId||c.id}
+function familyMembers(c){
+ let k=companyFamilyKey(c);
+ return Object.values(multi.companies).filter(x=>x.id===k||x.parentCompanyId===k).sort((a,b)=>(a.from||'').localeCompare(b.from||''));
+}
 function switchCompany(id){
- if(!multi.companies[id])return;
- saveMulti();multi.active=id;db=multi.companies[id].db;saveMulti();renderAll();show('home');
+ let c=multi.companies[id];if(!c)return;
+ let yrs=familyMembers(c);
+ if(yrs.length===1){saveMulti();multi.active=yrs[0].id;db=yrs[0].db;saveMulti();renderAll();show('home');return}
+ let menu=yrs.map((x,i)=>`${i+1}. ${periodText(x)}`).join('\n');
+ let pick=prompt(`Select Financial Year\n\n${menu}\n\nEnter number:`);
+ if(pick===null)return;
+ let n=parseInt(pick,10);
+ if(!n||n<1||n>yrs.length)return alert('Select a valid Financial Year number');
+ saveMulti();multi.active=yrs[n-1].id;db=yrs[n-1].db;saveMulti();renderAll();show('home');
 }
 function editCompany(id){
  let c=multi.companies[id];if(!c)return;
  let n=prompt('Company Name',c.name);if(n===null)return;n=n.trim();if(!n)return;
- let from=prompt('From Date (YYYY-MM-DD)',c.from||'');if(from===null)return;from=from.trim();
- let to=prompt('To Date (YYYY-MM-DD)',c.to||'');if(to===null)return;to=to.trim();
- if(!/^\d{4}-\d{2}-\d{2}$/.test(from)||!/^\d{4}-\d{2}-\d{2}$/.test(to)||from>to)return alert('Enter valid From/To dates');
- c.name=n;c.from=from;c.to=to;delete c.fy;saveMulti();renderCompanies();renderActiveCompany();
+ familyMembers(c).forEach(x=>x.name=n);
+ saveMulti();renderCompanies();renderActiveCompany();
 }
 function deleteCompany(id){
  let keys=Object.keys(multi.companies);if(keys.length<=1)return alert('At least one company must remain.');
@@ -260,10 +270,29 @@ function deleteCompany(id){
  if(multi.active===id){multi.active=Object.keys(multi.companies)[0];db=multi.companies[multi.active].db}
  saveMulti();renderAll();show('companies');
 }
+function deleteCompanyFamily(id){
+ let c=multi.companies[id];if(!c)return;
+ let yrs=familyMembers(c);
+ let totalA=yrs.reduce((z,x)=>z+(x.db.accounts||[]).length,0),totalE=yrs.reduce((z,x)=>z+(x.db.entries||[]).length,0);
+ if(Object.values(multi.companies).length===yrs.length)return alert('At least one company must remain.');
+ if(!confirm(`Delete ${c.name} and all ${yrs.length} Financial Year(s)?\nAccounts: ${totalA}\nEntries: ${totalE}\n\nThis cannot be undone.`))return;
+ let ids=new Set(yrs.map(x=>x.id));ids.forEach(x=>delete multi.companies[x]);
+ if(ids.has(multi.active)){multi.active=Object.keys(multi.companies)[0];db=multi.companies[multi.active].db}
+ saveMulti();renderAll();show('companies');
+}
 function renderCompanies(){
  if(!window.companyList)return;
- let cs=Object.values(multi.companies);
- companyList.innerHTML=cs.map(c=>`<div class="card" style="margin:10px 0"><b>${esc(c.name)}</b><div class="muted">${esc(periodText(c))}${c.id===multi.active?' • ACTIVE':''}</div><div class="actions"><button onclick="switchCompany('${c.id}')">Open</button><button onclick="editCompany('${c.id}')">Edit</button><button class="danger" onclick="deleteCompany('${c.id}')">Delete</button></div></div>`).join('');
+ let all=Object.values(multi.companies),roots=[];
+ for(let c of all){
+   let k=companyFamilyKey(c);
+   if(!roots.some(r=>companyFamilyKey(r)===k)){
+     roots.push(multi.companies[k]||c);
+   }
+ }
+ companyList.innerHTML=roots.map(c=>{
+   let yrs=familyMembers(c),active=yrs.some(x=>x.id===multi.active);
+   return `<div class="card" style="margin:10px 0"><b>${esc(c.name)}</b><div class="muted">${yrs.length} Financial Year${yrs.length===1?'':'s'}${active?' • ACTIVE':''}</div><div class="actions"><button onclick="switchCompany('${c.id}')">Open</button><button onclick="editCompany('${c.id}')">Edit</button><button class="danger" onclick="deleteCompanyFamily('${c.id}')">Delete</button></div></div>`
+ }).join('');
 }
 function renderActiveCompany(){
  let c=activeCompany();
@@ -277,7 +306,7 @@ function createNewFY(){
  let source=activeCompany(),from=newFYFrom.value,to=newFYTo.value;
  if(!from||!to)return alert('Enter From Date and To Date');
  if(from>to)return alert('From Date cannot be after To Date');
- if(Object.values(multi.companies).some(c=>c.name===source.name&&c.from===from&&c.to===to))return alert('This financial year already exists');
+ if(familyMembers(source).some(c=>c.from===from&&c.to===to))return alert('This financial year already exists');
  let carry=confirm('Carry forward closing balances to new financial year?');
  let olddb=db,newdb={accounts:[],entries:[],subgroups:JSON.parse(JSON.stringify(olddb.subgroups||[])),nextA:1,nextE:1,nextSG:olddb.nextSG||1};
  for(let a of olddb.accounts){
@@ -288,7 +317,7 @@ function createNewFY(){
    newdb.nextA=Math.max(newdb.nextA,a.id+1);
  }
  let id='c'+Date.now();
- multi.companies[id]={id,name:source.name,from,to,parentCompanyId:source.parentCompanyId||source.id,db:newdb};
+ multi.companies[id]={id,name:source.name,from,to,parentCompanyId:companyFamilyKey(source),db:newdb};
  multi.active=id;db=newdb;saveMulti();newFYFrom.value='';newFYTo.value='';renderAll();show('home');
 }
 function renderAll(){renderCompanies();renderActiveCompany();initReportPeriod();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
