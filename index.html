@@ -25,10 +25,27 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 .dateparts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
 .dateparts select{width:100%}
 @media(max-width:520px){.dateparts{grid-template-columns:1fr 1.25fr 1fr}}
+
+.company-hero{
+  border-radius:16px;padding:16px 18px;margin:12px 0;
+  background:linear-gradient(135deg,#fff3cd,#e8f4ff,#f5e9ff);
+  border:1px solid #ddd;box-shadow:0 3px 12px rgba(0,0,0,.08)
+}
+.company-hero .company-title{
+  font-size:24px;font-weight:800;letter-spacing:.2px;
+  background:linear-gradient(90deg,#7b1fa2,#1565c0,#00897b);
+  -webkit-background-clip:text;background-clip:text;color:transparent
+}
+.company-hero .period-title{font-size:15px;font-weight:700;margin-top:5px}
+.company-choice{
+  border-radius:12px!important;border:1px solid #d8d8e8!important;
+  background:linear-gradient(90deg,#fff8e1,#eef7ff)!important;
+  font-weight:700!important
+}
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.4.1 • Period Safe Delete • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.4.2 • Colourful Display • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -312,7 +329,7 @@ function logicalCompanies(){
  return out.sort((a,b)=>a.name.localeCompare(b.name));
 }
 function actionCompanyButtons(action){
- return logicalCompanies().map(c=>`<button style="width:100%;margin:6px 0;text-align:left;padding:13px" onclick="chooseCompanyAction('${action}','${c.id}')">${esc(c.name)}</button>`).join('');
+ return logicalCompanies().map(c=>`<button class="company-choice" style="width:100%;margin:6px 0;text-align:left;padding:13px" onclick="chooseCompanyAction('${action}','${c.id}')">${esc(c.name)}</button>`).join('');
 }
 function companyAction(action){
  let box=document.getElementById('companyActionArea');if(!box)return;
@@ -329,7 +346,7 @@ function chooseCompanyAction(action,id){
  if(action==='select'){
    let yrs=familyMembers(c);
    let box=document.getElementById('companyActionArea');
-   box.innerHTML=`<div class="card"><b>${esc(c.name)} - Select Period</b><div style="margin-top:10px">${yrs.map(x=>`<button style="width:100%;margin:6px 0;text-align:left;padding:13px" onclick="openSelectedFY('${x.id}')">${esc(periodText(x))}${x.id===multi.active?' • ACTIVE':''}</button>`).join('')}</div></div>`;
+   box.innerHTML=`<div class="card"><b>${esc(c.name)} - Select Period</b><div style="margin-top:10px">${yrs.map(x=>`<button class="company-choice" style="width:100%;margin:6px 0;text-align:left;padding:13px" onclick="openSelectedFY('${x.id}')">${esc(periodText(x))}${x.id===multi.active?' • ACTIVE':''}</button>`).join('')}</div></div>`;
    return;
  }
  if(action==='newfy'){
@@ -360,8 +377,13 @@ function renderCompanies(){
 }
 function renderActiveCompany(){
  let c=activeCompany();
- if(window.activeCompanyName)activeCompanyName.textContent=c.name;
- if(window.activeFYName)activeFYName.textContent=periodText(c);
+ if(window.activeCompanyName){
+   activeCompanyName.textContent=c.name;
+   let host=activeCompanyName.parentElement;
+   if(host)host.classList.add('company-hero');
+   activeCompanyName.classList.add('company-title');
+ }
+ if(window.activeFYName){activeFYName.textContent=periodText(c);activeFYName.classList.add('period-title');}
 }
 function cloneOpeningAccount(a,newId,opening){
  return {id:newId,name:a.name,group:a.group,subgroup:a.subgroup||null,opening:Math.abs(opening),otype:opening>=0?'Dr':'Cr'}
