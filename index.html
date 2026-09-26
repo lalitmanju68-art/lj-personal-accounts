@@ -202,7 +202,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <div id="loginMsg" class="muted"></div>
 </div></div>
 <div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.1.2 • Party Details + Quick Add • Data Safe</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.1.3 • Account Details + Quick Add • Data Safe</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -254,7 +254,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <label>Account Name</label><input id="aname" placeholder="e.g. HDFC Bank">
 <label>Group</label><select id="agroup" onchange="renderSubGroupOptions();togglePartyDetails()"><option>Cash</option><option>Bank</option><option>Party / Person</option><option>Income</option><option>Expense</option><option>Asset</option><option>Liability</option><option>Capital</option></select>
 <label>Sub Group</label><select id="asubgroup"><option value="">General / None</option></select>
-<div id="partyDetails" class="hidden">
+<div id="partyDetails">
 <label>Address <span class="muted">(Optional)</span></label><textarea id="partyAddress" rows="2"></textarea>
 <div class="grid"><div><label>City <span class="muted">(Optional)</span></label><input id="partyCity"></div><div><label>Mobile <span class="muted">(Optional)</span></label><input id="partyMobile" inputmode="numeric" maxlength="10" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)"></div></div>
 <label>PAN No. <span class="muted">(Optional)</span></label><input id="partyPan" maxlength="10" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,10)">
@@ -390,14 +390,10 @@ if(chosen){let mg=chosen.group||chosen.mainGroup;if(mg)agroup.value=mg}
 let name=aname.value.trim(),id=+accountEditId.value;if(!name)return alert('Enter account name');
 if(db.accounts.some(a=>a.name.toLowerCase()==name.toLowerCase()&&a.id!==id))return alert('Account already exists');
 let pan=(window.partyPan?.value||'').trim().toUpperCase(),mobile=(window.partyMobile?.value||'').trim();
-if(agroup.value==='Party / Person'||agroup.value==='Person'){
- if(mobile&&!/^\d{10}$/.test(mobile))return alert('Mobile No. must be exactly 10 digits');
- if(pan&&!/^[A-Z0-9]{10}$/.test(pan))return alert('PAN No. must be exactly 10 characters in CAPITAL letters');
-}
-let data={name,group:agroup.value,subgroup:+asubgroup.value||null,opening:+aopen.value||0,otype:aotype.value};
-if(agroup.value==='Party / Person'||agroup.value==='Person'){
- data.address=(window.partyAddress?.value||'').trim();data.city=(window.partyCity?.value||'').trim();data.mobile=mobile;data.pan=pan;
-}else{data.address='';data.city='';data.mobile='';data.pan=''}
+if(mobile&&!/^\d{10}$/.test(mobile))return alert('Mobile No. must be exactly 10 digits');
+if(pan&&!/^[A-Z0-9]{10}$/.test(pan))return alert('PAN No. must be exactly 10 characters in CAPITAL letters');
+let data={name,group:agroup.value,subgroup:+asubgroup.value||null,opening:+aopen.value||0,otype:aotype.value,
+ address:(window.partyAddress?.value||'').trim(),city:(window.partyCity?.value||'').trim(),mobile:mobile,pan:pan};
 let newId=id;
 if(id){let a=acc(id);if(!a)return alert('Account not found');Object.assign(a,data)}
 else{newId=db.nextA++;db.accounts.push({id:newId,...data})}
@@ -410,8 +406,7 @@ function editAccount(id){let a=acc(id);if(!a)return;show('accounts');aname.value
 function cancelAccountEdit(doRender=true){aname.value='';agroup.value='Cash';fillAllAccountSubGroups();asubgroup.value='';aopen.value=0;aotype.value='Dr';if(window.partyAddress)partyAddress.value='';if(window.partyCity)partyCity.value='';if(window.partyMobile)partyMobile.value='';if(window.partyPan)partyPan.value='';togglePartyDetails();accountEditId.value='';accountSaveBtn.textContent='ADD ACCOUNT';accountCancelBtn.classList.add('hidden');if(doRender)renderAll()}
 function togglePartyDetails(){
  let box=document.getElementById('partyDetails');if(!box)return;
- let isParty=agroup.value==='Party / Person'||agroup.value==='Person';
- box.classList.toggle('hidden',!isParty);
+ box.classList.remove('hidden');
 }
 function quickAddAccount(){
  sessionStorage.setItem('ljpa_quick_add_account','1');
