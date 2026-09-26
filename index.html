@@ -21,10 +21,14 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #bbb;border-radiu
 table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;border-bottom:1px solid #eee;text-align:left}td.num,th.num{text-align:right}
 .hidden{display:none}.muted{color:#777;font-size:13px}.danger{color:#a00}.pill{display:inline-block;padding:3px 7px;background:#eee;border-radius:999px;font-size:11px}
 @media(max-width:480px){.grid{grid-template-columns:1fr 1fr}.row{grid-template-columns:1fr}.tabs{grid-template-columns:repeat(5,1fr)}}
+
+.dateparts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+.dateparts select{width:100%}
+@media(max-width:520px){.dateparts{grid-template-columns:1fr 1.25fr 1fr}}
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.2 • Multi Company • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.2.1 • Date Select Fix • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -98,8 +102,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 
 <section id="reports" class="hidden">
 <div class="card"><b>Financial Year / Report Period</b>
-<label>Financial Year</label><select id="fySelect" onchange="applyFY()"></select>
-<div class="grid"><div><label>From Date</label><input type="date" id="repFrom" onchange="renderReports()"></div><div><label>To Date</label><input type="date" id="repTo" onchange="renderReports()"></div></div>
+<label>Active Financial Year</label><div id="reportActiveFY" style="font-weight:700;margin:6px 0 12px"></div>
+<div class="grid">
+<div><label>From Date</label><input type="date" id="repFrom" onchange="syncDateParts('repFrom');renderReports()"><div id="repFromParts" class="dateparts"></div></div>
+<div><label>To Date</label><input type="date" id="repTo" onchange="syncDateParts('repTo');renderReports()"><div id="repToParts" class="dateparts"></div></div>
+</div>
 </div>
 <div class="card"><b>Day Book</b><div id="daybook"></div></div>
 <div class="card"><b>Trial Balance</b><div id="trial"></div></div>
@@ -160,14 +167,32 @@ function showLedgerMatches(){let inp=document.getElementById('ledgerSearch'),out
 function selectLedgerAccount(id){let a=acc(id);if(!a)return;ledgerSearch.value=a.name;ledgerAcc.value=a.id;ledgerMatches.innerHTML='';renderLedger()}
 function ledgerPick(){showLedgerMatches()}
 function renderLedger(){let id=+ledgerAcc.value,a=acc(id);if(!a){ledgerOut.innerHTML='';return}let from=window.ledgerFrom?ledgerFrom.value:'',to=window.ledgerTo?ledgerTo.value:'';let all=db.entries.filter(e=>e.dr==id||e.cr==id).sort((x,y)=>x.date.localeCompare(y.date)||x.id-y.id),running=(a.otype==='Dr'?a.opening:-a.opening);if(from){for(let e of all.filter(e=>e.date<from))running+=(e.dr==id?e.amount:-e.amount)}let rows=all.filter(e=>(!from||e.date>=from)&&(!to||e.date<=to));let html=`<p class="muted">${from?idate(from):'Beginning'} to ${to?idate(to):'Today'} • Opening: ${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</p><table><tr><th>Date / Particular</th><th class="num">Dr</th><th class="num">Cr</th><th class="num">Balance</th><th>Action</th></tr>`;for(let e of rows){let isdr=e.dr==id;running+=isdr?e.amount:-e.amount;html+=`<tr><td>${idate(e.date)}<br>${esc(acc(isdr?e.cr:e.dr)?.name||'')}<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${isdr?money(e.amount):''}</td><td class="num">${!isdr?money(e.amount):''}</td><td class="num">${money(Math.abs(running))} ${running>=0?'Dr':'Cr'}</td><td><button onclick="editEntry(${e.id})">Edit</button> <button class="danger" onclick="deleteEntry(${e.id})">Delete</button></td></tr>`}ledgerOut.innerHTML=html+'</table>'}
-function fyForDate(d){let x=new Date(d+'T00:00:00'),y=x.getFullYear();if(x.getMonth()<3)y--;return y}
-function fyLabel(y){return `${y}-${String(y+1).slice(-2)}`}
-function fyRange(y){return {from:`${y}-04-01`,to:`${y+1}-03-31`}}
-function initFY(){if(!window.fySelect)return;let now=new Date().toISOString().slice(0,10),years=db.entries.map(e=>fyForDate(e.date)).filter(Number.isFinite);years.push(fyForDate(now));let min=Math.min(...years),max=Math.max(...years),old=fySelect.value;fySelect.innerHTML='';for(let y=max;y>=min;y--){let o=document.createElement('option');o.value=y;o.textContent=fyLabel(y);fySelect.appendChild(o)}fySelect.value=old&&[...fySelect.options].some(o=>o.value===old)?old:fyForDate(now);if(!repFrom.value&&!repTo.value){let r=fyRange(+fySelect.value);repFrom.value=r.from;repTo.value=r.to}}
-function applyFY(){let r=fyRange(+fySelect.value);repFrom.value=r.from;repTo.value=r.to;renderReports()}
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function daysInMonth(y,m){return new Date(y,m,0).getDate()}
+function buildDateParts(id){
+ let input=document.getElementById(id),box=document.getElementById(id+'Parts');if(!input||!box)return;
+ let base=input.value||new Date().toISOString().slice(0,10),[y,m,d]=base.split('-').map(Number);
+ let c=activeCompany(),minY=c.from?+c.from.slice(0,4):y-10,maxY=c.to?+c.to.slice(0,4):y+10;
+ minY=Math.min(minY,y-5);maxY=Math.max(maxY,y+5);
+ box.innerHTML=`<select id="${id}Day" aria-label="Day"></select><select id="${id}Month" aria-label="Month"></select><select id="${id}Year" aria-label="Year"></select>`;
+ let ds=document.getElementById(id+'Day'),ms=document.getElementById(id+'Month'),ys=document.getElementById(id+'Year');
+ ms.innerHTML=MONTHS.map((n,i)=>`<option value="${i+1}">${n}</option>`).join('');
+ ys.innerHTML=Array.from({length:maxY-minY+1},(_,i)=>maxY-i).map(v=>`<option value="${v}">${v}</option>`).join('');
+ ms.value=m;ys.value=y;
+ function fillDays(sel=d){let max=daysInMonth(+ys.value,+ms.value);ds.innerHTML=Array.from({length:max},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('');ds.value=Math.min(sel,max)}
+ fillDays(d);
+ function changed(){fillDays(+ds.value);let yy=+ys.value,mm=+ms.value,dd=+ds.value;input.value=`${yy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;renderReports()}
+ ds.onchange=changed;ms.onchange=changed;ys.onchange=changed;
+}
+function syncDateParts(id){buildDateParts(id)}
+function initReportPeriod(){
+ let c=activeCompany();if(!window.repFrom||!window.repTo)return;
+ repFrom.value=c.from||repFrom.value;repTo.value=c.to||repTo.value;
+ if(window.reportActiveFY)reportActiveFY.textContent=periodText(c);
+ buildDateParts('repFrom');buildDateParts('repTo');
+}
 function renderReports(){
 if(!window.repFrom||!window.repTo||!window.incomeExpense)return;
-if(window.fySelect&&!fySelect.options.length)initFY();
 let from=repFrom.value,to=repTo.value,periodEntries=db.entries.filter(e=>(!from||e.date>=from)&&(!to||e.date<=to));
 let es=[...periodEntries].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
 daybook.innerHTML=es.length?`<table><tr><th>Date</th><th>Entry</th><th class="num">Amount</th></tr>${es.map(e=>`<tr><td>${idate(e.date)}</td><td>${esc(acc(e.dr)?.name)} Dr<br>${esc(acc(e.cr)?.name)} Cr<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${money(e.amount)}</td></tr>`).join('')}</table>`:'<p class="muted">No entries.</p>';
@@ -266,7 +291,7 @@ function createNewFY(){
  multi.companies[id]={id,name:source.name,from,to,parentCompanyId:source.parentCompanyId||source.id,db:newdb};
  multi.active=id;db=newdb;saveMulti();newFYFrom.value='';newFYTo.value='';renderAll();show('home');
 }
-function renderAll(){renderCompanies();renderActiveCompany();let _c=activeCompany();if(window.repFrom&&window.repTo&&_c.from&&_c.to){if(!repFrom.value)repFrom.value=_c.from;if(!repTo.value)repTo.value=_c.to;}options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();renderAccounts();renderLedgerSuggestions();renderLedger();initFY();renderReports();renderAccountSuggestions();renderSearch()}
+function renderAll(){renderCompanies();renderActiveCompany();initReportPeriod();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
 date.value=new Date().toISOString().slice(0,10);renderAll();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
