@@ -24,7 +24,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V1.9.5.1 • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.0 • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -32,10 +32,11 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 5px;b
 <section id="home">
 <div class="grid">
 <div class="stat"><small>Cash Balance</small><strong id="cashBal">₹0</strong></div>
-<div class="stat"><small>Bank Balance</small><strong id="bankBal">₹0</strong></div>
-<div class="stat"><small>Total Debit</small><strong id="totalDr">₹0</strong></div>
-<div class="stat"><small>Total Credit</small><strong id="totalCr">₹0</strong></div>
+<div class="stat"><small>Total Bank Balance</small><strong id="bankBal">₹0</strong></div>
+<div class="stat"><small>This Month Income</small><strong id="monthIncome">₹0</strong></div>
+<div class="stat"><small>This Month Expense</small><strong id="monthExpense">₹0</strong></div>
 </div>
+<div class="card"><small class="muted">This Month</small><div style="font-size:20px;margin-top:5px"><b id="monthNetLabel">Net Surplus</b>: <strong id="monthNet">₹0</strong></div></div>
 <div class="card"><b>Recent Entries</b><div id="recent"></div></div>
 </section>
 
@@ -128,7 +129,7 @@ function editEntry(id){let e=db.entries.find(x=>x.id==id);if(!e)return;show('ent
 function deleteEntry(id){if(!confirm('Delete this entry?'))return;db.entries=db.entries.filter(e=>e.id!=id);persist();renderAll()}
 function acc(id){return db.accounts.find(a=>a.id==id)}
 function bal(a){let b=(a.otype==='Dr'?a.opening:-a.opening);for(let e of db.entries){if(e.dr==a.id)b+=e.amount;if(e.cr==a.id)b-=e.amount}return b}
-function renderHome(){let cash=db.accounts.filter(a=>a.group==='Cash').reduce((s,a)=>s+bal(a),0), bank=db.accounts.filter(a=>a.group==='Bank').reduce((s,a)=>s+bal(a),0),sum=db.entries.reduce((s,e)=>s+e.amount,0);cashBal.textContent=money(cash);bankBal.textContent=money(bank);totalDr.textContent=money(sum);totalCr.textContent=money(sum);let es=[...db.entries].sort((a,b)=>b.id-a.id).slice(0,5);recent.innerHTML=es.length?`<table>${es.map(e=>`<tr><td>${idate(e.date)}<br><span class="pill">${e.type}</span></td><td>${esc(acc(e.dr)?.name||'')} → ${esc(acc(e.cr)?.name||'')}<br><span class="muted">${esc(e.narr)}</span></td><td class="num">${money(e.amount)}<br><button onclick="editEntry(${e.id})">Edit</button> <button class="danger" onclick="deleteEntry(${e.id})">Delete</button></td></tr>`).join('')}</table>`:'<p class="muted">No entries yet.</p>'}
+function renderHome(){let cash=db.accounts.filter(a=>a.group==='Cash').reduce((z,a)=>z+bal(a),0),bank=db.accounts.filter(a=>a.group==='Bank').reduce((z,a)=>z+bal(a),0);cashBal.textContent=money(cash);bankBal.textContent=money(bank);let now=new Date(),ym=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,inc=0,exp=0;for(let e of db.entries.filter(e=>e.date&&e.date.slice(0,7)===ym)){let da=acc(e.dr),ca=acc(e.cr);if(da?.group==='Expense')exp+=e.amount;if(ca?.group==='Expense')exp-=e.amount;if(ca?.group==='Income')inc+=e.amount;if(da?.group==='Income')inc-=e.amount}monthIncome.textContent=money(inc);monthExpense.textContent=money(exp);let net=inc-exp;monthNetLabel.textContent=net>=0?'Net Surplus':'Net Deficit';monthNet.textContent=money(Math.abs(net));let es=[...db.entries].sort((a,b)=>b.id-a.id).slice(0,5);recent.innerHTML=es.length?`<table>${es.map(e=>`<tr><td>${idate(e.date)}<br><span class="pill">${esc(e.type)}</span></td><td>${esc(acc(e.dr)?.name||'')} → ${esc(acc(e.cr)?.name||'')}<br><span class="muted">${esc(e.narr||'')}</span></td><td class="num">${money(e.amount)}<br><button onclick="editEntry(${e.id})">Edit</button> <button class="danger" onclick="deleteEntry(${e.id})">Delete</button></td></tr>`).join('')}</table>`:'<p class="muted">No entries yet.</p>'}
 function renderAccounts(){accountList.innerHTML=`<table><tr><th>Account</th><th>Group / Sub Group</th><th class="num">Balance</th><th>Action</th></tr>${db.accounts.map(a=>{let b=bal(a),system=a.id===1||a.id===2,used=db.entries.some(e=>e.dr===a.id||e.cr===a.id),sub=sg(a.subgroup);return `<tr><td>${esc(a.name)}</td><td>${esc(a.group)}${sub?'<br><span class="muted">'+esc(sub.name)+'</span>':''}</td><td class="num">${money(Math.abs(b))} ${b>=0?'Dr':'Cr'}</td><td><button onclick="editAccount(${a.id})">Edit</button> ${system||used?'':`<button class="danger" onclick="deleteAccount(${a.id})">Delete</button>`}</td></tr>`}).join('')}</table>`}
 function renderLedgerSuggestions(){}
 function showLedgerMatches(){let inp=document.getElementById('ledgerSearch'),out=document.getElementById('ledgerMatches'),sel=document.getElementById('ledgerAcc');if(!inp||!out||!sel)return;let q=inp.value.trim().toLowerCase();if(!q){out.innerHTML='';sel.value='';ledgerOut.innerHTML='';return}let list=db.accounts.filter(a=>a.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,12);out.innerHTML=list.length?`<div class="card" style="padding:6px;margin-top:6px">${list.map(a=>`<button style="display:block;width:100%;text-align:left;margin:3px 0" onclick="selectLedgerAccount(${a.id})">${esc(a.name)}</button>`).join('')}</div>`:'<p class="muted">No matching account.</p>'}
