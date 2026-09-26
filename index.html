@@ -81,7 +81,7 @@ label[for="agroup"]{display:none!important}
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.8.2 • Sub Group Only • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V2.8.3 • All Sub Groups • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -664,6 +664,25 @@ function balanceSheetHTML(){
 
 
 
+
+function fillAllAccountSubGroups(){
+ const sg=document.getElementById('asubgroup'),g=document.getElementById('agroup');
+ if(!sg||!g)return;
+ const old=sg.value;
+ const subs=db.subgroups||[];
+ sg.innerHTML='<option value="">Select Sub Group</option>'+
+   subs.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
+ if(old && subs.some(x=>String(x.id)===String(old)))sg.value=old;
+ sg.onchange=function(){
+   const rec=subs.find(x=>String(x.id)===String(this.value));
+   if(rec){
+     const mg=rec.group||rec.mainGroup;
+     if(mg)g.value=mg;
+   }
+ };
+ sg.dispatchEvent(new Event('change'));
+ hideAccountMainGroup();
+}
 function hideAccountMainGroup(){
  const g=document.getElementById('agroup'), sg=document.getElementById('asubgroup');
  if(!g)return;
@@ -733,7 +752,7 @@ function upgradeAccountGroupUI(){
    g.dispatchEvent(new Event('change'));
  };
 }
-function renderAll(){renderBackupInfo();renderCompanies();setTimeout(()=>{upgradeAccountGroupUI();subGroupOnlyUI();hideAccountMainGroup();},0);renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();setTimeout(paintDashboard,0);renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
+function renderAll(){renderBackupInfo();renderCompanies();setTimeout(()=>{upgradeAccountGroupUI();subGroupOnlyUI();fillAllAccountSubGroups();hideAccountMainGroup();},0);renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();renderSubGroups();voucherUI();renderHome();setTimeout(paintDashboard,0);renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
 date.value=new Date().toISOString().slice(0,10);renderAll();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
@@ -746,8 +765,8 @@ save=function(){
 };
 
 document.addEventListener('DOMContentLoaded',()=>{
- setTimeout(()=>{subGroupOnlyUI();hideAccountMainGroup();},50);
+ setTimeout(()=>{subGroupOnlyUI();fillAllAccountSubGroups();hideAccountMainGroup();},50);
  const target=document.getElementById('accounts');
- if(target)new MutationObserver(()=>setTimeout(()=>{subGroupOnlyUI();hideAccountMainGroup();},0)).observe(target,{childList:true,subtree:true});
+ if(target)new MutationObserver(()=>setTimeout(()=>{subGroupOnlyUI();fillAllAccountSubGroups();hideAccountMainGroup();},0)).observe(target,{childList:true,subtree:true});
 });
 </script></body></html>
