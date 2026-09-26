@@ -123,7 +123,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 </style>
 </head>
 <body><div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.0.1 • Entry Clear Fix • Double Entry</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.0.2 • Repeat Bank/Cash Entry • Double Entry</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
 </div>
@@ -324,14 +324,17 @@ function voucherUI(){
 function contraUI(){if(!window.contraDir)return;let bb=contraDir.value==='bankToBank';let w=document.getElementById('bank2Wrap');let l=document.getElementById('bank1Label');if(w)w.classList.toggle('hidden',!bb);if(l)l.textContent=bb?'From Bank':'Bank Account'}
 function saveEntry(){let d,c,a=+amount.value;if(vtype.value==='Contra'){if(contraDir.value==='bankToBank'){let from=acc(+contraBank.value),to=acc(+contraBank2.value);if(!from||!to||from.group!=='Bank'||to.group!=='Bank')return alert('Select both bank accounts');if(from.id===to.id)return alert('From Bank and To Bank cannot be same');d=to.id;c=from.id}else{let cash=db.accounts.find(x=>x.group==='Cash'),bank=acc(+contraBank.value);if(!cash||!bank)return alert('Cash and Bank account are required');if(contraDir.value==='bankToCash'){d=cash.id;c=bank.id}else{d=bank.id;c=cash.id}}}else{d=+dr.value;c=+cr.value}if(!date.value||!d||!c||!(a>0))return alert('Date, accounts and Amount are required');if(d===c)return alert('Debit and Credit account cannot be same');let id=+editId.value;let item={id:id||db.nextE++,date:date.value,type:vtype.value,dr:d,cr:c,amount:a,narr:narr.value.trim(),created:new Date().toISOString()};if(id){let i=db.entries.findIndex(e=>e.id==id);if(i>=0)db.entries[i]=item}else db.entries.push(item);persist();entryMsg.textContent=id?'Entry updated successfully.':'Entry saved successfully.';resetEntry(false);renderAll()}
 function resetEntry(clearMsg=true){
+ let t=vtype.value;
+ let keepPaymentCr=(t==='Payment'&&window.cr)?cr.value:'';
+ let keepReceiptDr=(t==='Receipt'&&window.dr)?dr.value:'';
  amount.value='';
  narr.value='';
  editId.value='';
  saveBtn.textContent='SAVE ENTRY';
  if(clearMsg)entryMsg.textContent='';
  voucherUI();
- if(window.dr)dr.value='';
- if(window.cr)cr.value='';
+ if(window.dr)dr.value=(t==='Receipt'?keepReceiptDr:'');
+ if(window.cr)cr.value=(t==='Payment'?keepPaymentCr:'');
  if(window.contraBank)contraBank.selectedIndex=0;
  if(window.contraBank2)contraBank2.value='';
 }
