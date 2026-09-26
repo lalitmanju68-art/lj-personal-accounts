@@ -1,0 +1,8 @@
+{
+  "name": "LJ Personal Accounts",
+  "short_name": "LJ Accounts",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff"
+}
