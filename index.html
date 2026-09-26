@@ -212,9 +212,9 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <div id="loginMsg" class="muted"></div>
 </div></div>
 <div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.2.1 • Confirmation Party Fix • Data Safe</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.2.2 • Period Backup / Restore • Data Safe</div></header>
 <div class="tabs">
-<button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('backup')">Backup</button>
+<button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
 <div class="card" style="margin:12px 20px;padding:12px 16px">
 <div class="grid">
@@ -231,7 +231,10 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
     <button onclick="companyAction('newfy')">New Financial Year</button>
     <button onclick="companyAction('edit')">Edit Company Details</button>
     <button onclick="companyAction('newco')">New Company</button>
-    <button onclick="showSecuritySetup()">Login Security</button><button class="danger" onclick="companyAction('delete')">Delete Financial Year</button>
+    <button onclick="showSecuritySetup()">Login Security</button>
+    <button onclick="companyAction('backup')">Backup</button>
+    <button onclick="companyAction('restore')">Restore</button>
+    <button class="danger" onclick="companyAction('delete')">Delete Financial Year</button>
   </div>
 </div>
 <div id="companyActionArea"></div>
@@ -683,7 +686,7 @@ function companyAction(action){
    let y=new Date().getFullYear(),mo=new Date().getMonth()+1;y=mo<4?y-1:y;
    companyFrom.value=`${y}-04-01`;companyTo.value=`${y+1}-03-31`;return;
  }
- let titles={select:'Select Company',newfy:'New Financial Year - Select Company',edit:'Edit Company Name - Select Company',delete:'Delete Financial Year - Select Company'};
+ let titles={select:'Select Company',newfy:'New Financial Year - Select Company',edit:'Edit Company Name - Select Company',backup:'Backup - Select Company',restore:'Restore - Select Company',delete:'Delete Financial Year - Select Company'};
  box.innerHTML=`<div class="card"><b>${titles[action]}</b><div style="margin-top:10px">${actionCompanyButtons(action)}</div></div>`;
 }
 function chooseCompanyAction(action,id){
@@ -714,6 +717,14 @@ function chooseCompanyAction(action,id){
    <div class="actions"><button class="primary" onclick="saveCompanyDetails('${id}')">SAVE COMPANY DETAILS</button></div></div>`;
    return;
  }
+ if(action==='backup'||action==='restore'){
+   let yrs=familyMembers(c),box=document.getElementById('companyActionArea');
+   let label=action==='backup'?'Backup':'Restore';
+   box.innerHTML=`<div class="card"><b>${esc(c.name)} - ${label} - Select Period</b>
+   <p class="muted">Only the selected Financial Year / Period will be ${action==='backup'?'backed up':'restored'}.</p>
+   <div style="margin-top:10px">${yrs.map(x=>`<button class="company-choice" style="width:100%;margin:6px 0;text-align:left;padding:13px" onclick="${action==='backup'?'backupSelectedPeriod':'restoreSelectedPeriod'}('${x.id}')">${esc(periodText(x))}</button>`).join('')}</div></div>`;
+   return;
+ }
  if(action==='delete'){
    let yrs=familyMembers(c),box=document.getElementById('companyActionArea');
    box.innerHTML=`<div class="card"><b>${esc(c.name)} - Select Period to Delete</b>
@@ -732,6 +743,66 @@ function saveCompanyDetails(id){
  let data={name,address:(document.getElementById('editCompanyAddress')?.value||'').trim(),mobile:mob,pan:pan,gst:(document.getElementById('editCompanyGst')?.value||'').trim(),fssai:(document.getElementById('editCompanyFssai')?.value||'').trim()};
  familyMembers(c).forEach(x=>Object.assign(x,data));
  saveMulti();renderAll();companyAction('edit');
+}
+
+
+function safeFilePart(x){return String(x||'Company').replace(/[\\/:*?"<>|]+/g,'_').replace(/\s+/g,'_')}
+function backupSelectedPeriod(id){
+ let c=multi.companies[id];if(!c)return;
+ // Snapshot current active data first without changing active company.
+ activeCompany().db=db;
+ localStorage.setItem(MK,JSON.stringify(multi));
+ localStorage.setItem(K,JSON.stringify(db));
+ let obj={
+   app:'LJ Personal Accounts',
+   backupType:'single-period',
+   version:'3.2.2',
+   createdAt:new Date().toISOString(),
+   company:{name:c.name,address:c.address||'',mobile:c.mobile||'',pan:c.pan||'',gst:c.gst||'',fssai:c.fssai||''},
+   period:{from:c.from||'',to:c.to||'',fy:c.fy||''},
+   db:c.db
+ };
+ let blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=u;a.download=`LJ_${safeFilePart(c.name)}_${(c.from||'').replaceAll('-','')}_${(c.to||'').replaceAll('-','')}_Backup.json`;
+ document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000);
+ alert(`Backup created successfully.\n\n${c.name}\n${periodText(c)}`);
+}
+function restoreSelectedPeriod(id){
+ let c=multi.companies[id];if(!c)return;
+ let inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';
+ inp.onchange=function(){
+   let f=inp.files&&inp.files[0];if(!f)return;
+   let r=new FileReader();
+   r.onload=function(){
+     try{
+       let obj=JSON.parse(r.result);
+       if(!obj||obj.backupType!=='single-period'||!obj.db||!Array.isArray(obj.db.accounts)||!Array.isArray(obj.db.entries)||!Array.isArray(obj.db.subgroups))
+         throw new Error('Please select a V3.2.2 single-period backup file.');
+       let bf=obj.period?.from||'',bt=obj.period?.to||'';
+       if(bf!==String(c.from||'')||bt!==String(c.to||'')){
+         return alert(`Backup period does not match selected period.\n\nSelected: ${periodText(c)}\nBackup: ${bf&&bt?idate(bf)+' to '+idate(bt):'Unknown period'}`);
+       }
+       if(obj.company?.name && String(obj.company.name).trim().toLowerCase()!==String(c.name).trim().toLowerCase()){
+         if(!confirm(`Backup company name is "${obj.company.name}" but selected company is "${c.name}".\n\nContinue restore into selected company/period?`))return;
+       }
+       let en=obj.db.entries.length,ac=obj.db.accounts.length;
+       if(!confirm(`Restore selected period?\n\nCompany: ${c.name}\nPeriod: ${periodText(c)}\nAccounts: ${ac}\nEntries: ${en}\n\nONLY this selected period will be replaced. Other companies and periods will remain unchanged.`))return;
+       c.db=obj.db;
+       // Keep selected period identity and company master; replace only period accounting data.
+       multi.companies[id]=c;
+       localStorage.setItem(MK,JSON.stringify(multi));
+       if(multi.active===id){
+         db=c.db;
+         localStorage.setItem(K,JSON.stringify(db));
+         renderAll();
+       }
+       alert(`Restore completed successfully.\n\n${c.name}\n${periodText(c)}`);
+       companyAction('restore');
+     }catch(e){alert('Restore failed: '+e.message)}
+   };
+   r.readAsText(f);
+ };
+ inp.click();
 }
 
 const SECURITY_KEY='ljpa_security_v31';
