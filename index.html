@@ -212,7 +212,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <div id="loginMsg" class="muted"></div>
 </div></div>
 <div class="app">
-<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.2.2 • Period Backup / Restore • Data Safe</div></header>
+<header><b>LJ Personal Accounts</b><div class="muted">Offline V3.2.3 • Account & Sub Group Lists • Data Safe</div></header>
 <div class="tabs">
 <button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
 </div>
@@ -263,7 +263,18 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 </div></section>
 
 <section id="accounts" class="hidden">
-<div class="card"><b>Add Account</b>
+<h2>Accounts</h2>
+<div class="card">
+ <b>Account Menu</b>
+ <div class="actions" style="display:grid;gap:9px;margin-top:12px">
+  <button onclick="showAccountPanel('addAccount')">1 Add Account</button>
+  <button onclick="showAccountPanel('addSubGroup')">2 Add Sub Group</button>
+  <button onclick="showAccountPanel('accountListPanel')">3 Account List</button>
+  <button onclick="showAccountPanel('subGroupListPanel')">4 Sub Group List</button>
+ </div>
+</div>
+
+<div id="addAccount" class="account-panel card"><b>Add Account</b>
 <label>Account Name</label><input id="aname" placeholder="e.g. HDFC Bank">
 <label>Group</label><select id="agroup" onchange="renderSubGroupOptions();togglePartyDetails()"><option>Cash</option><option>Bank</option><option>Party / Person</option><option>Income</option><option>Expense</option><option>Asset</option><option>Liability</option><option>Capital</option></select>
 <label>Sub Group</label><select id="asubgroup"><option value="">General / None</option></select>
@@ -275,13 +286,23 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <div class="row"><div><label>Opening Balance</label><input id="aopen" type="number" step="0.01" value="0"></div><div><label>Opening Type</label><select id="aotype"><option>Dr</option><option>Cr</option></select></div></div>
 <input type="hidden" id="accountEditId"><div class="actions"><button class="primary" id="accountSaveBtn" onclick="saveAccount()">ADD ACCOUNT</button><button id="accountCancelBtn" class="hidden" onclick="cancelAccountEdit()">Cancel</button></div>
 </div>
-<div class="card"><b>Sub Groups</b>
-<label>Main Group</label><select id="sgGroup" onchange="renderSubGroups()"><option>Cash</option><option>Bank</option><option>Party / Person</option><option>Income</option><option>Expense</option><option>Asset</option><option>Liability</option><option>Capital</option></select>
+
+<div id="addSubGroup" class="account-panel card hidden"><b>Add Sub Group</b>
+<label>Main Group</label><select id="sgGroup"><option>Cash</option><option>Bank</option><option>Party / Person</option><option>Income</option><option>Expense</option><option>Asset</option><option>Liability</option><option>Capital</option></select>
 <label>Sub Group Name</label><input id="sgName" placeholder="e.g. Vehicle Expense">
 <input type="hidden" id="sgEditId">
 <div class="actions"><button class="primary" id="sgSaveBtn" onclick="saveSubGroup()">ADD SUB GROUP</button><button id="sgCancelBtn" class="hidden" onclick="cancelSubGroupEdit()">Cancel</button></div>
+</div>
+
+<div id="accountListPanel" class="account-panel card hidden"><b>Account List</b>
+<label>Search Account</label>
+<div class="ledger-search-row"><input id="accountListSearch" type="search" autocomplete="off" placeholder="Type account / sub group / group" oninput="renderAccounts()"><button type="button" class="ledger-clear-btn" onclick="clearAccountListSearch()" title="Clear">✕</button></div>
+<div id="accountList"></div></div>
+
+<div id="subGroupListPanel" class="account-panel card hidden"><b>Sub Group List</b>
+<label>Search Sub Group</label>
+<div class="ledger-search-row"><input id="subGroupSearch" type="search" autocomplete="off" placeholder="Type sub group / main group" oninput="renderSubGroups()"><button type="button" class="ledger-clear-btn" onclick="clearSubGroupSearch()" title="Clear">✕</button></div>
 <div id="subGroupList"></div></div>
-<div class="card"><b>Account List</b><div id="accountList"></div></div>
 </section>
 
 <section id="ledger" class="hidden">
@@ -400,6 +421,12 @@ function idate(d){if(!d)return '';let p=String(d).split('-');return p.length===3
 function show(id){document.querySelectorAll('main>section').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden');renderAll()}
 function options(sel,include=true){let s=document.getElementById(sel);let val=s.value;s.innerHTML=db.accounts.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val)s.value=val}
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function showAccountPanel(id){
+ document.querySelectorAll('#accounts .account-panel').forEach(x=>x.classList.add('hidden'));
+ let p=document.getElementById(id);if(p)p.classList.remove('hidden');
+ if(id==='accountListPanel')renderAccounts();
+ if(id==='subGroupListPanel')renderSubGroups();
+}
 function saveAccount(){
 let chosen=(db.subgroups||[]).find(x=>String(x.id)===String(asubgroup.value));
 if(chosen){let mg=chosen.group||chosen.mainGroup;if(mg)agroup.value=mg}
@@ -418,7 +445,7 @@ let returnToEntry=sessionStorage.getItem('ljpa_quick_add_account')==='1';
 cancelAccountEdit(false);renderAll();
 if(returnToEntry){sessionStorage.removeItem('ljpa_quick_add_account');show('entry');voucherUI();let a=acc(newId);if(a){let t=vtype.value;if(t==='Payment'&&a.group!=='Cash'&&a.group!=='Bank')dr.value=a.id;else if(t==='Receipt'&&a.group!=='Cash'&&a.group!=='Bank')cr.value=a.id;else if(t==='Journal'){dr.value=a.id}}}
 }
-function editAccount(id){let a=acc(id);if(!a)return;show('accounts');aname.value=a.name;agroup.value=a.group;fillAllAccountSubGroups();asubgroup.value=a.subgroup||'';aopen.value=a.opening||0;aotype.value=a.otype||'Dr';if(window.partyAddress)partyAddress.value=a.address||'';if(window.partyCity)partyCity.value=a.city||'';if(window.partyMobile)partyMobile.value=a.mobile||'';if(window.partyPan)partyPan.value=(a.pan||'').toUpperCase();togglePartyDetails();accountEditId.value=a.id;accountSaveBtn.textContent='UPDATE ACCOUNT';accountCancelBtn.classList.remove('hidden');aname.focus()}
+function editAccount(id){let a=acc(id);if(!a)return;show('accounts');showAccountPanel('addAccount');aname.value=a.name;agroup.value=a.group;fillAllAccountSubGroups();asubgroup.value=a.subgroup||'';aopen.value=a.opening||0;aotype.value=a.otype||'Dr';if(window.partyAddress)partyAddress.value=a.address||'';if(window.partyCity)partyCity.value=a.city||'';if(window.partyMobile)partyMobile.value=a.mobile||'';if(window.partyPan)partyPan.value=(a.pan||'').toUpperCase();togglePartyDetails();accountEditId.value=a.id;accountSaveBtn.textContent='UPDATE ACCOUNT';accountCancelBtn.classList.remove('hidden');aname.focus()}
 function cancelAccountEdit(doRender=true){aname.value='';agroup.value='Cash';fillAllAccountSubGroups();asubgroup.value='';aopen.value=0;aotype.value='Dr';if(window.partyAddress)partyAddress.value='';if(window.partyCity)partyCity.value='';if(window.partyMobile)partyMobile.value='';if(window.partyPan)partyPan.value='';togglePartyDetails();accountEditId.value='';accountSaveBtn.textContent='ADD ACCOUNT';accountCancelBtn.classList.add('hidden');if(doRender)renderAll()}
 function togglePartyDetails(){
  let box=document.getElementById('partyDetails');if(!box)return;
@@ -426,15 +453,21 @@ function togglePartyDetails(){
 }
 function quickAddAccount(){
  sessionStorage.setItem('ljpa_quick_add_account','1');
- show('accounts');cancelAccountEdit(false);
+ show('accounts');showAccountPanel('addAccount');cancelAccountEdit(false);
  aname.value='';aname.focus();
 }
 function deleteAccount(id){let a=acc(id);if(!a)return;if(id===1||id===2)return alert('System account cannot be deleted');if(db.entries.some(e=>e.dr===id||e.cr===id))return alert('This account has transactions and cannot be deleted');if(!confirm('Delete '+a.name+'?'))return;db.accounts=db.accounts.filter(x=>x.id!==id);persist();if(+accountEditId.value===id)cancelAccountEdit(false);renderAll()}
 function sg(id){return db.subgroups.find(x=>x.id==id)}
 function renderSubGroupOptions(){let sel=document.getElementById('asubgroup');if(!sel)return;let val=sel.value,g=agroup.value;let list=db.subgroups.filter(x=>x.group===g).sort((a,b)=>a.name.localeCompare(b.name));sel.innerHTML='<option value="">General / None</option>'+list.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');if(list.some(x=>String(x.id)===String(val)))sel.value=val}
-function renderSubGroups(){let out=document.getElementById('subGroupList');if(!out)return;let g=sgGroup.value,list=db.subgroups.filter(x=>x.group===g).sort((a,b)=>a.name.localeCompare(b.name));out.innerHTML=list.length?`<table><tr><th>Sub Group</th><th>Action</th></tr>${list.map(x=>`<tr><td>${esc(x.name)}</td><td><button onclick="editSubGroup(${x.id})">Edit</button> ${db.accounts.some(a=>a.subgroup==x.id)?'':`<button class="danger" onclick="deleteSubGroup(${x.id})">Delete</button>`}</td></tr>`).join('')}</table>`:'<p class="muted">No sub groups in this main group.</p>'}
+function renderSubGroups(){
+ let out=document.getElementById('subGroupList');if(!out)return;
+ let q=(document.getElementById('subGroupSearch')?.value||'').trim().toLowerCase();
+ let list=(db.subgroups||[]).filter(x=>!q||x.name.toLowerCase().includes(q)||String(x.group||'').toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name));
+ out.innerHTML=list.length?`<table><tr><th>Sub Group</th><th>Main Group</th><th>Action</th></tr>${list.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.group||'')}</td><td><button onclick="editSubGroup(${x.id})">Edit</button> ${db.accounts.some(a=>a.subgroup==x.id)?'':`<button class="danger" onclick="deleteSubGroup(${x.id})">Delete</button>`}</td></tr>`).join('')}</table>`:'<p class="muted">No matching sub groups.</p>'
+}
+function clearSubGroupSearch(){let x=document.getElementById('subGroupSearch');if(x)x.value='';renderSubGroups()}
 function saveSubGroup(){let name=sgName.value.trim(),group=sgGroup.value,id=+sgEditId.value;if(!name)return alert('Enter sub group name');if(db.subgroups.some(x=>x.group===group&&x.name.toLowerCase()===name.toLowerCase()&&x.id!==id))return alert('Sub group already exists');if(id){let x=sg(id);if(!x)return alert('Sub group not found');x.name=name;x.group=group}else db.subgroups.push({id:db.nextSG++,name,group});persist();cancelSubGroupEdit(false);renderAll()}
-function editSubGroup(id){let x=sg(id);if(!x)return;sgGroup.value=x.group;sgName.value=x.name;sgEditId.value=x.id;sgSaveBtn.textContent='UPDATE SUB GROUP';sgCancelBtn.classList.remove('hidden');sgName.focus();renderSubGroups()}
+function editSubGroup(id){let x=sg(id);if(!x)return;showAccountPanel('addSubGroup');sgGroup.value=x.group;sgName.value=x.name;sgEditId.value=x.id;sgSaveBtn.textContent='UPDATE SUB GROUP';sgCancelBtn.classList.remove('hidden');sgName.focus();renderSubGroups()}
 function cancelSubGroupEdit(doRender=true){sgName.value='';sgEditId.value='';sgSaveBtn.textContent='ADD SUB GROUP';sgCancelBtn.classList.add('hidden');if(doRender)renderSubGroups()}
 function deleteSubGroup(id){let x=sg(id);if(!x)return;if(db.accounts.some(a=>a.subgroup==id))return alert('This sub group is used by an account and cannot be deleted');if(!confirm('Delete '+x.name+'?'))return;db.subgroups=db.subgroups.filter(y=>y.id!==id);persist();renderAll()}
 function voucherAccountOptions(sel,allowedGroups,excludeCashBank){
@@ -505,7 +538,13 @@ function deleteEntry(id){if(!confirm('Delete this entry?'))return;db.entries=db.
 function acc(id){return db.accounts.find(a=>a.id==id)}
 function bal(a){let b=(a.otype==='Dr'?a.opening:-a.opening);for(let e of db.entries){if(e.dr==a.id)b+=e.amount;if(e.cr==a.id)b-=e.amount}return b}
 function renderHome(){let cash=db.accounts.filter(a=>a.group==='Cash').reduce((z,a)=>z+bal(a),0),bank=db.accounts.filter(a=>a.group==='Bank').reduce((z,a)=>z+bal(a),0);cashBal.textContent=money(cash);bankBal.textContent=money(bank);let now=new Date(),ym=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,inc=0,exp=0;for(let e of db.entries.filter(e=>e.date&&e.date.slice(0,7)===ym)){let da=acc(e.dr),ca=acc(e.cr);if(da?.group==='Expense')exp+=e.amount;if(ca?.group==='Expense')exp-=e.amount;if(ca?.group==='Income')inc+=e.amount;if(da?.group==='Income')inc-=e.amount}monthIncome.textContent=money(inc);monthExpense.textContent=money(exp);let net=inc-exp;monthNetLabel.textContent=net>=0?'Net Surplus':'Net Deficit';monthNet.textContent=money(Math.abs(net));let es=[...db.entries].sort((a,b)=>b.id-a.id).slice(0,5);recent.innerHTML=es.length?`<table>${es.map(e=>`<tr><td>${idate(e.date)}<br><span class="pill">${esc(e.type)}</span></td><td>${esc(acc(e.dr)?.name||'')} → ${esc(acc(e.cr)?.name||'')}<br><span class="muted">${esc(e.narr||'')}</span></td><td class="num">${money(e.amount)}<br><button onclick="editEntry(${e.id})">Edit</button> <button class="danger" onclick="deleteEntry(${e.id})">Delete</button></td></tr>`).join('')}</table>`:'<p class="muted">No entries yet.</p>'}
-function renderAccounts(){accountList.innerHTML=`<table><tr><th>Account</th><th>Group / Sub Group</th><th class="num">Balance</th><th>Action</th></tr>${db.accounts.map(a=>{let b=bal(a),system=a.id===1||a.id===2,used=db.entries.some(e=>e.dr===a.id||e.cr===a.id),sub=sg(a.subgroup);return `<tr><td>${esc(a.name)}</td><td>${esc(a.group)}${sub?'<br><span class="muted">'+esc(sub.name)+'</span>':''}</td><td class="num">${money(Math.abs(b))} ${b>=0?'Dr':'Cr'}</td><td><button onclick="editAccount(${a.id})">Edit</button> ${system||used?'':`<button class="danger" onclick="deleteAccount(${a.id})">Delete</button>`}</td></tr>`}).join('')}</table>`}
+function renderAccounts(){
+ let out=document.getElementById('accountList');if(!out)return;
+ let q=(document.getElementById('accountListSearch')?.value||'').trim().toLowerCase();
+ let list=db.accounts.filter(a=>{let sub=sg(a.subgroup);return !q||a.name.toLowerCase().includes(q)||String(a.group||'').toLowerCase().includes(q)||(sub&&sub.name.toLowerCase().includes(q))});
+ out.innerHTML=list.length?`<table><tr><th>Account</th><th>Sub Group</th><th class="num">Balance</th><th>Action</th></tr>${list.map(a=>{let b=bal(a),system=a.id===1||a.id===2,used=db.entries.some(e=>e.dr===a.id||e.cr===a.id),sub=sg(a.subgroup);return `<tr><td>${esc(a.name)}</td><td>${sub?esc(sub.name):'<span class="muted">General / None</span>'}</td><td class="num">${money(Math.abs(b))} ${b>=0?'Dr':'Cr'}</td><td><button onclick="editAccount(${a.id})">Edit</button> ${system||used?'':`<button class="danger" onclick="deleteAccount(${a.id})">DEL</button>`}</td></tr>`}).join('')}</table>`:'<p class="muted">No matching accounts.</p>'
+}
+function clearAccountListSearch(){let x=document.getElementById('accountListSearch');if(x)x.value='';renderAccounts()}
 function renderLedgerSuggestions(){}
 function showLedgerMatches(){let inp=document.getElementById('ledgerSearch'),out=document.getElementById('ledgerMatches'),sel=document.getElementById('ledgerAcc');if(!inp||!out||!sel)return;let q=inp.value.trim().toLowerCase();if(!q){out.innerHTML='';sel.value='';ledgerOut.innerHTML='';return}let list=db.accounts.filter(a=>a.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,12);out.innerHTML=list.length?`<div class="card" style="padding:6px;margin-top:6px">${list.map(a=>`<button style="display:block;width:100%;text-align:left;margin:3px 0" onclick="selectLedgerAccount(${a.id})">${esc(a.name)}</button>`).join('')}</div>`:'<p class="muted">No matching account.</p>'}
 function selectLedgerAccount(id){let a=acc(id);if(!a)return;ledgerSearch.value=a.name;ledgerAcc.value=a.id;ledgerMatches.innerHTML='';renderLedger()}
