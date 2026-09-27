@@ -201,6 +201,70 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 @media(max-width:650px){.confirm-parties,.signature-grid{grid-template-columns:1fr}}
 @media print{.report-control{display:none!important}.confirmation-doc{box-shadow:none!important;border:0!important}.confirm-parties,.signature-grid{grid-template-columns:1fr 1fr!important}}
 </style>
+
+<style>
+/* V3.2.3 Desktop/Laptop Compact View - layout only; accounting/data logic unchanged */
+@media (min-width: 700px) and (max-height: 1000px){
+  .app{max-width:1100px}
+  header{padding:7px 14px}
+  header b{font-size:18px}
+  header .muted{font-size:11px}
+  .tabs{grid-template-columns:repeat(7,1fr);gap:5px;padding:6px;top:39px}
+  .tabs button{font-size:12px;padding:7px 4px}
+  main{padding:8px 12px}
+  .card{padding:9px 11px;margin-bottom:8px;border-radius:11px}
+  .stat{padding:8px 10px}
+  .stat strong{font-size:17px}
+  h2{font-size:20px;margin:8px 0}
+  label{font-size:12px;margin:6px 0 3px}
+  input,select,textarea{padding:8px;border-radius:8px}
+  textarea{min-height:42px}
+  button,.btn{padding:8px 7px;border-radius:8px}
+  .actions{gap:6px;margin-top:8px}
+  .grid,.row{gap:7px}
+  th,td{padding:6px 4px}
+  .company-hero{padding:10px 14px;margin:7px 0}
+  .company-hero .company-title{font-size:21px}
+  .app>.card[style*="margin:12px 20px"]{margin:7px 12px!important;padding:7px 11px!important}
+  #accounts>.card .actions[style*="display:grid"],
+  #reports #reportMenuCard .actions[style*="display:grid"],
+  #companies .actions[style*="display:grid"]{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px!important;margin-top:8px!important}
+  #accounts>.card .actions[style*="display:grid"] button,
+  #reports #reportMenuCard .actions[style*="display:grid"] button,
+  #companies .actions[style*="display:grid"] button{padding:8px 6px}
+  #partyDetails textarea{min-height:38px}
+  #home .cash-label,#home .bank-label,#home .income-label,#home .expense-label{font-size:14px}
+  #home .cash-label~b,#home .bank-label~b,#home .income-label~b,#home .expense-label~b{font-size:20px}
+}
+</style>
+
+<style id="desktop-compact-colour-fix">
+/* Desktop/Laptop compact colour fix - presentation only */
+@media (min-width: 700px){
+  button,.btn{color:#171717!important;background:#fff!important;border-color:#aeb4bc!important;}
+  button:hover,.btn:hover{background:#f2f5f8!important;}
+  button.primary{background:#111!important;color:#fff!important;border-color:#111!important;}
+  button.danger,.danger{color:#a00!important;}
+  .tabs button{color:#171717!important;background:#fff!important;border-color:#aeb4bc!important;}
+  .company-choice{color:#171717!important;}
+}
+</style>
+
+<style id="desktop-native-control-fix">
+/* Desktop native form-control visibility fix only */
+@media (min-width:700px){
+  input,select,textarea{color:#171717!important;background-color:#fff!important;-webkit-text-fill-color:#171717!important;color-scheme:light!important;}
+  select option{color:#171717!important;background:#fff!important;-webkit-text-fill-color:#171717!important;}
+  select option:checked{color:#111!important;background:#d9ecff!important;}
+  input[type="date"]{color:#171717!important;background:#fff!important;-webkit-text-fill-color:#171717!important;min-height:38px!important;line-height:1.25!important;}
+  input[type="date"]::-webkit-datetime-edit,
+  input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+  input[type="date"]::-webkit-datetime-edit-text,
+  input[type="date"]::-webkit-datetime-edit-month-field,
+  input[type="date"]::-webkit-datetime-edit-day-field,
+  input[type="date"]::-webkit-datetime-edit-year-field{color:#171717!important;-webkit-text-fill-color:#171717!important;}
+}
+</style>
 </head>
 <body><div id="loginGate" class="login-gate hidden">
 <div class="login-box">
@@ -214,7 +278,7 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 <div class="app">
 <header><b>LJ Personal Accounts</b><div class="muted">Offline V3.2.3 • Account & Sub Group Lists • Data Safe</div></header>
 <div class="tabs">
-<button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button>
+<button onclick="show('companies')">Company</button><button onclick="show('home')">Home</button><button onclick="show('entry')">+ Entry</button><button onclick="show('accounts')">Accounts</button><button onclick="show('ledger')">Ledger</button><button onclick="show('reports')">Reports</button><button onclick="show('sync')">Sync</button>
 </div>
 <div class="card" style="margin:12px 20px;padding:12px 16px">
 <div class="grid">
@@ -239,6 +303,22 @@ body.printing-ledger .card{box-shadow:none!important;border:0!important}
 </div>
 <div id="companyActionArea"></div>
 </section>
+<section id="sync" class="hidden">
+<h2>Secure Cloud Sync</h2>
+<div class="card">
+ <b>MilesWeb Secure Sync</b>
+ <p class="muted">Manual sync only. Your Private Sync Key is kept for this browser session only and is not included in backup.</p>
+ <label>Private Sync Key</label><input id="syncKey" type="password" autocomplete="off" placeholder="Enter Private Sync Key">
+ <div class="actions">
+  <button onclick="syncCheckCloud()">CHECK CLOUD</button>
+  <button class="primary" onclick="syncUploadCloud()">UPLOAD TO CLOUD</button>
+  <button onclick="syncDownloadCloud()">DOWNLOAD FROM CLOUD</button>
+ </div>
+ <div class="card" style="margin:14px 0 0"><small class="muted">Last Sync</small><div><b id="syncLast">Never</b></div><div id="syncStatus" class="muted" style="margin-top:6px">Ready.</div></div>
+</div>
+<div class="card"><b>Safety Rules</b><p class="muted">Upload replaces the current cloud copy. Download replaces local accounting data only after confirmation and first downloads a local safety backup. Automatic overwrite is disabled.</p></div>
+</section>
+
 <section id="home">
 <div class="grid">
 <div class="stat"><small>Cash Balance</small><strong id="cashBal">₹0</strong></div>
@@ -1305,7 +1385,66 @@ function upgradeAccountGroupUI(){
    g.dispatchEvent(new Event('change'));
  };
 }
-function renderAll(){renderBackupInfo();renderCompanies();setTimeout(()=>{fillAllAccountSubGroups();hideAccountMainGroup();},0);renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();fillAllAccountSubGroups();hideAccountMainGroup();renderSubGroups();voucherUI();renderHome();setTimeout(paintDashboard,0);renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
+function renderAll(){renderBackupInfo();renderSyncInfo();renderCompanies();setTimeout(()=>{fillAllAccountSubGroups();hideAccountMainGroup();},0);renderActiveCompany();initReportPeriod();suggestNextFY();options('dr');options('cr');options('ledgerAcc');let banks=db.accounts.filter(a=>a.group==='Bank');let cb=document.getElementById('contraBank');if(cb){let val=cb.value;cb.innerHTML=banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val&&banks.some(a=>String(a.id)===String(val)))cb.value=val}let cb2=document.getElementById('contraBank2');if(cb2){let val2=cb2.value;cb2.innerHTML='<option value="">Select To Bank</option>'+banks.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');if(val2&&banks.some(a=>String(a.id)===String(val2)))cb2.value=val2}renderSubGroupOptions();fillAllAccountSubGroups();hideAccountMainGroup();renderSubGroups();voucherUI();renderHome();setTimeout(paintDashboard,0);renderAccounts();renderLedgerSuggestions();renderLedger();renderReports();renderAccountSuggestions();renderSearch()}
+// V3.2.3 Secure Sync add-on — isolated from accounting persistence logic.
+const LJ_SYNC_API='https://riyalmfood.com/ljapi/sync.php';
+const LJ_SYNC_LAST='ljpa_sync_last_v323';
+function syncKeyValue(){
+ let el=document.getElementById('syncKey');
+ let k=(el&&el.value||sessionStorage.getItem('ljpa_sync_key_session')||'').trim();
+ if(!k){alert('Enter Private Sync Key first.');return ''}
+ sessionStorage.setItem('ljpa_sync_key_session',k);return k;
+}
+function renderSyncInfo(){
+ let el=document.getElementById('syncLast');if(el)el.textContent=localStorage.getItem(LJ_SYNC_LAST)||'Never';
+ let k=sessionStorage.getItem('ljpa_sync_key_session')||'',inp=document.getElementById('syncKey');if(inp&&!inp.value&&k)inp.value=k;
+}
+function syncStatus(msg){let el=document.getElementById('syncStatus');if(el)el.textContent=msg}
+async function syncRequest(method,payload){
+ let key=syncKeyValue();if(!key)throw new Error('Sync cancelled');
+ let headers={'X-LJ-Sync-Key':key},opt={method,headers,cache:'no-store'};
+ if(method==='POST'){headers['Content-Type']='application/json';opt.body=JSON.stringify(payload)}
+ let r=await fetch(LJ_SYNC_API,opt),txt=await r.text(),j;
+ try{j=JSON.parse(txt)}catch(e){throw new Error('Invalid server response')}
+ if(!r.ok||!j.success)throw new Error(j.message||('HTTP '+r.status));return j;
+}
+function syncPayload(){
+ saveMulti();
+ return {app:'LJ Personal Accounts',version:'3.2.3',sync_format:1,createdAt:new Date().toISOString(),data:multi,brs:brsStore()};
+}
+async function syncCheckCloud(){
+ try{syncStatus('Checking cloud...');let j=await syncRequest('GET');
+  if(!j.has_data){syncStatus('Cloud is reachable. No cloud data found.');return}
+  let d=j.data||{};
+  if(d.test_only)syncStatus('Cloud connected. TEST DATA is currently stored — no real accounts downloaded.');
+  else if(d.data&&d.data.companies)syncStatus('Cloud connected. LJ accounting backup found. Updated: '+(j.updated_at||''));
+  else syncStatus('Cloud connected, but stored data is not a recognized LJ backup.');
+ }catch(e){syncStatus('ERROR: '+e.message)}
+}
+async function syncUploadCloud(){
+ try{
+  if(!confirm('UPLOAD TO CLOUD?\n\nThis will replace the current cloud copy with THIS device data.\n\nNo local data will be deleted.'))return;
+  syncStatus('Uploading securely...');let j=await syncRequest('POST',syncPayload());
+  let now=new Date().toLocaleString('en-IN');localStorage.setItem(LJ_SYNC_LAST,'Upload • '+now);renderSyncInfo();syncStatus(j.message||'Upload successful.');
+ }catch(e){syncStatus('ERROR: '+e.message)}
+}
+async function syncDownloadCloud(){
+ try{
+  syncStatus('Reading cloud...');let j=await syncRequest('GET');
+  if(!j.has_data)return syncStatus('No cloud data found.');
+  let obj=j.data||{};
+  if(obj.test_only)return syncStatus('STOPPED: Cloud contains TEST DATA only. Upload real data from the correct device first.');
+  let m=obj.data;
+  if(!m||!m.companies||!m.active||!m.companies[m.active])return syncStatus('STOPPED: Cloud data is not a valid LJ full backup.');
+  if(!confirm('DOWNLOAD FROM CLOUD?\n\nA safety backup will download first. Then LOCAL accounting data on this device will be replaced by the cloud copy.\n\nContinue?'))return syncStatus('Download cancelled.');
+  downloadFullBackup();
+  multi=m;db=multi.companies[multi.active].db;
+  localStorage.setItem(MK,JSON.stringify(multi));localStorage.setItem(K,JSON.stringify(db));
+  if(obj.brs&&typeof obj.brs==='object')localStorage.setItem(BRS_KEY,JSON.stringify(obj.brs));
+  let now=new Date().toLocaleString('en-IN');localStorage.setItem(LJ_SYNC_LAST,'Download • '+now);renderAll();renderSyncInfo();syncStatus('Cloud data downloaded and restored successfully.');show('home');alert('Cloud data restored successfully. Safety backup was downloaded first.');
+ }catch(e){syncStatus('ERROR: '+e.message)}
+}
+
 date.value=new Date().toISOString().slice(0,10);renderAll();setTimeout(initLoginSecurity,0);
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
